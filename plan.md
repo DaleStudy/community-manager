@@ -124,7 +124,7 @@ community-manager-test/
 | -------------------- | ---------------------------------------------------- |
 | `DISCORD_PUBLIC_KEY` | Discord App의 Ed25519 공개키 (서명 검증용)           |
 | `DISCORD_BOT_TOKEN`  | Discord Bot Token                                    |
-| `DISCORD_GUILD_ID`   | 대상 Discord 서버 ID                                 |
+| `DISCORD_SERVER_ID`   | 대상 Discord 서버 ID                                 |
 | `DISCORD_ROLE_ID`    | 부여할 역할 ID                                       |
 | `GITHUB_TOKEN`       | GitHub Personal Access Token (또는 GitHub App token) |
 | `GITHUB_ORG`         | GitHub 조직 이름                                     |
