@@ -3,23 +3,27 @@
   "main": "src/index.ts",
   "compatibility_date": "2024-01-01",
   "compatibility_flags": ["nodejs_compat"],
-  "vars": {},
+  "vars": {
+    "DISCORD_PUBLIC_KEY": "a926f35d63341202ce06c958510fd4e5d101dd41307d739481d2e0422977a2c8",
+    "DISCORD_APPLICATION_ID": "1490524745483943986",
+    "DISCORD_SERVER_ID": "775115965964222492",
+  },
   "kv_namespaces": [],
   "durable_objects": {
-    "bindings": []
+    "bindings": [],
   },
   "r2_buckets": [],
   "services": [],
   "analytics_engine_datasets": [],
   "queues": {
     "producers": [],
-    "consumers": []
+    "consumers": [],
   },
   "triggers": {
-    "crons": []
+    "crons": [],
   },
   "routes": [],
   "no_bundle": true,
   "minify": false,
-  "first_party_worker": false
+  "first_party_worker": false,
 }
