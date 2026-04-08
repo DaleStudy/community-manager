@@ -22,7 +22,7 @@
     "crons": [],
   },
   "routes": [],
-  "no_bundle": true,
+  "no_bundle": false,
   "minify": false,
   "first_party_worker": false,
 }

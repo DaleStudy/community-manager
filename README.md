@@ -58,17 +58,34 @@ community-manager/
 └── README.md             # 프로젝트 설명
 ```
 
-## 환경 변수 (Cloudflare Secrets)
+## 환경 변수
 
-| Key                  | 설명                                                 |
-| -------------------- | ---------------------------------------------------- |
-| `DISCORD_PUBLIC_KEY` | Discord App의 Ed25519 공개키 (서명 검증용)           |
-| `DISCORD_BOT_TOKEN`  | Discord Bot Token                                    |
-| `DISCORD_GUILD_ID`   | 대상 Discord 서버 ID                                 |
-| `DISCORD_ROLE_ID`    | 부여할 역할 ID                                       |
-| `GITHUB_TOKEN`       | GitHub Personal Access Token (또는 GitHub App token) |
-| `GITHUB_ORG`         | GitHub 조직 이름                                     |
-| `GITHUB_TEAM_SLUG`   | 초대할 팀 slug                                       |
+### Cloudflare Secrets (운영진만 접근)
+
+| Key                          | 설명                                       |
+| ---------------------------- | ------------------------------------------ |
+| `DISCORD_PUBLIC_KEY`         | Discord App의 Ed25519 공개키 (서명 검증용) |
+| `DISCORD_BOT_TOKEN`          | Discord Bot Token                          |
+| `DISCORD_GUILD_ID`           | 대상 Discord 서버 ID                       |
+| `DISCORD_ROLE_ID`            | 부여할 역할 ID                             |
+| `GITHUB_APP_ID`              | GitHub App ID                              |
+| `GITHUB_APP_INSTALLATION_ID` | GitHub App의 조직 Installation ID          |
+| `GITHUB_APP_PRIVATE_KEY`     | GitHub App Private Key (PEM 형식)          |
+
+### wrangler.jsonc vars (공개값, 커밋됨)
+
+| Key                | 설명              |
+| ------------------ | ----------------- |
+| `GITHUB_ORG`       | GitHub 조직 이름  |
+| `GITHUB_TEAM_SLUG` | 초대할 팀 slug    |
+
+### 로컬 개발 (.dev.vars)
+
+`.dev.vars.example`을 복사해 `.dev.vars`를 만들고 운영진에게 값을 전달받아 채워넣으세요.
+
+```bash
+cp .dev.vars.example .dev.vars
+```
 
 ## 배포 및 개발
 
@@ -118,7 +135,7 @@ wrangler deploy
 
 - **서명 검증**: Discord는 응답 속도와 무관하게 서명 검증 실패 시 webhook endpoint를 차단함. Web Crypto API 사용 필수
 - **응답 시간**: Discord Interaction은 3초 내 응답 필요 → Deferred Response 패턴 필수
-- **GitHub Token 권한**: 후원 확인(GraphQL)과 팀 초대(REST) 모두 필요
+- **GitHub App 권한**: 후원 확인(GraphQL)과 팀 초대(REST) 모두 처리. Organization Members: Read & Write 권한 필요
 - **Bot 역할 위치**: Discord에서 Bot이 부여할 역할보다 높은 위치에 있어야 함
 - **중복 실행 방지**: PUT 방식으로 멱등성 보장
 
