@@ -40,8 +40,25 @@ async function handleVerify(interaction: any, env: Env): Promise<void> {
     return;
   }
 
-  const token = await getInstallationToken(env);
-  const isSponsored = await checkSponsorship(githubUsername, env.GITHUB_ORG, token);
+  let token: string;
+  try {
+    token = await getInstallationToken(env);
+  } catch (e) {
+    console.error("[handleVerify] getInstallationToken failed:", e);
+    await sendFollowup(interaction, "⚠️ 처리 중 오류가 발생했습니다.");
+    return;
+  }
+
+  let isSponsored: boolean;
+  try {
+    isSponsored = await checkSponsorship(githubUsername, env.GITHUB_ORG, token);
+  } catch (e) {
+    console.error("[handleVerify] checkSponsorship failed:", e);
+    await sendFollowup(interaction, "⚠️ 처리 중 오류가 발생했습니다.");
+    return;
+  }
+
+  console.log(`[handleVerify] ${githubUsername} isSponsored=${isSponsored}`);
 
   if (!isSponsored) {
     await sendFollowup(interaction, "❌ 해당 GitHub 계정의 후원 내역을 찾을 수 없습니다.");
