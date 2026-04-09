@@ -5,8 +5,8 @@
   "account_id": "94480614a6df7731f1e4491bdac5c440",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "GITHUB_TEAM_SLUG": "test",
     "GITHUB_ORG": "DaleStudy",
+    "ROLE_TEAM_CONFIG": "[{\"value\":\"placeholder\",\"label\":\"Placeholder\",\"discordRoleId\":\"REPLACE_ME\",\"teamSlug\":\"REPLACE_ME\"}]",
   },
   "kv_namespaces": [],
   "durable_objects": {
