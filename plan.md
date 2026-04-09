@@ -172,10 +172,10 @@ community-manager/
 
 ## Implementation Tasks
 
-- [ ] 1. 프로젝트 초기 세팅 (Wrangler, TypeScript, package.json)
-- [ ] 2. Cloudflare Worker 진입점 및 라우팅 구현 (index.ts)
-- [ ] 3. role/team 파라미터 파싱 및 ROLE_TEAM_CONFIG 매핑 조회
-- [ ] 4. GitHub GraphQL 후원 확인 구현 (github.ts)
+- [x] 1. 프로젝트 초기 세팅 (Wrangler, TypeScript, package.json)
+- [x] 2. Cloudflare Worker 진입점 및 라우팅 구현 (index.ts)
+- [x] 3. role/team 파라미터 파싱 및 ROLE_TEAM_CONFIG 매핑 조회
+- [x] 4. GitHub GraphQL 후원 확인 구현 (github.ts)
 - [ ] 5. GitHub REST API 팀 초대 구현 (github.ts)
 - [ ] 6. Deferred response + followup 메시지 흐름 구현
 - [ ] 7. 환경변수 설정 및 Cloudflare 배포 / Worker end-to-end 검증
