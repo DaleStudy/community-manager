@@ -1,5 +1,5 @@
 import type { Env, RoleTeamConfig } from "./types.js";
-import { getInstallationToken, checkSponsorship } from "./github.js";
+import { getInstallationToken, checkSponsorship, getTeamCreatedAt } from "./github.js";
 
 export default {
   async fetch(
@@ -37,19 +37,29 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
   const teamValue = options.find((o: any) => o.name === "team")
     ?.value as string;
 
-  // const config: RoleTeamConfig[] = JSON.parse(env.ROLE_TEAM_CONFIG);
-  // const roleConfig = config.find((c) => c.value === roleValue);
-  // const teamConfig = config.find((c) => c.value === teamValue);
+  const config: RoleTeamConfig[] = JSON.parse(env.ROLE_TEAM_CONFIG);
+  const roleConfig = config.find((c) => c.value === roleValue);
+  const teamConfig = config.find((c) => c.value === teamValue);
 
-  // if (!roleConfig || !teamConfig) {
-  //   return "⚠️ 잘못된 role 또는 team 값입니다.";
-  // }
+  if (!roleConfig || !teamConfig) {
+    return "⚠️ 잘못된 role 또는 team 값입니다.";
+  }
 
   const token = await getInstallationToken(env);
-  const isSponsored = await checkSponsorship(githubUsername, env.GITHUB_ORG, token);
+  const sponsorship = await checkSponsorship(githubUsername, env.GITHUB_ORG, token);
 
-  if (!isSponsored) {
+  if (!sponsorship.sponsored) {
     return "❌ 해당 GitHub 계정의 후원 내역을 찾을 수 없습니다.";
+  }
+
+  if ((sponsorship.amountInDollars ?? 0) < 5) {
+    return `❌ 후원 금액이 $5 미만입니다. (현재: $${sponsorship.amountInDollars})`;
+  }
+
+  const teamCreatedAt = await getTeamCreatedAt(env.GITHUB_ORG, teamConfig.teamSlug, token);
+
+  if (sponsorship.lastSponsoredAt! < teamCreatedAt) {
+    return `❌ 가장 최근 후원일(${sponsorship.lastSponsoredAt!.slice(0, 10)})이 팀 생성일(${teamCreatedAt.slice(0, 10)}) 이전입니다.`;
   }
 
   // TODO: 팀 초대 → 역할 부여
