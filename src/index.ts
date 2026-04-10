@@ -37,13 +37,13 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
   const teamValue = options.find((o: any) => o.name === "team")
     ?.value as string;
 
-  const config: RoleTeamConfig[] = JSON.parse(env.ROLE_TEAM_CONFIG);
-  const roleConfig = config.find((c) => c.value === roleValue);
-  const teamConfig = config.find((c) => c.value === teamValue);
+  // const config: RoleTeamConfig[] = JSON.parse(env.ROLE_TEAM_CONFIG);
+  // const roleConfig = config.find((c) => c.value === roleValue);
+  // const teamConfig = config.find((c) => c.value === teamValue);
 
-  if (!roleConfig || !teamConfig) {
-    return "⚠️ 잘못된 role 또는 team 값입니다.";
-  }
+  // if (!roleConfig || !teamConfig) {
+  //   return "⚠️ 잘못된 role 또는 team 값입니다.";
+  // }
 
   const token = await getInstallationToken(env);
   const isSponsored = await checkSponsorship(githubUsername, env.GITHUB_ORG, token);

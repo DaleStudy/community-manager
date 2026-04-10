@@ -37,8 +37,8 @@ export async function checkSponsorship(
 ): Promise<boolean> {
   const query = `
     query($login: String!, $org: String!) {
-      user(login: $login) {
-        isSponsoredBy(accountLogin: $org)
+      organization(login: $org) {
+        isSponsoredBy(accountLogin: $login)
       }
     }
   `;
@@ -60,7 +60,7 @@ export async function checkSponsorship(
     throw new Error(`GraphQL error: ${JSON.stringify(result.errors)}`);
   }
 
-  return result.data?.user?.isSponsoredBy === true;
+  return result.data?.organization?.isSponsoredBy === true;
 }
 
 /**
@@ -87,15 +87,44 @@ async function importPrivateKey(pem: string): Promise<CryptoKey> {
   const pemFooter = isPKCS8 ? "-----END PRIVATE KEY-----" : "-----END RSA PRIVATE KEY-----";
 
   const pemContents = pem.replace(pemHeader, "").replace(pemFooter, "").replace(/\s/g, "");
-  const binaryDer = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
+  const pkcs1Der = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
+
+  // GitHub App 키는 PKCS1 형식이므로 PKCS8로 변환
+  const keyData = isPKCS8 ? pkcs1Der : pkcs1ToPkcs8(pkcs1Der);
 
   return crypto.subtle.importKey(
     "pkcs8",
-    binaryDer,
+    keyData,
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
     ["sign"]
   );
+}
+
+function pkcs1ToPkcs8(pkcs1: Uint8Array): Uint8Array {
+  function encodeLength(len: number): Uint8Array {
+    if (len < 128) return new Uint8Array([len]);
+    if (len < 256) return new Uint8Array([0x81, len]);
+    return new Uint8Array([0x82, (len >> 8) & 0xff, len & 0xff]);
+  }
+
+  function concat(...arrays: Uint8Array[]): Uint8Array {
+    const total = arrays.reduce((sum, a) => sum + a.length, 0);
+    const result = new Uint8Array(total);
+    let offset = 0;
+    for (const a of arrays) { result.set(a, offset); offset += a.length; }
+    return result;
+  }
+
+  const version = new Uint8Array([0x02, 0x01, 0x00]);
+  const rsaOid = new Uint8Array([
+    0x30, 0x0d,
+    0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
+    0x05, 0x00,
+  ]);
+  const octetString = concat(new Uint8Array([0x04]), encodeLength(pkcs1.length), pkcs1);
+  const inner = concat(version, rsaOid, octetString);
+  return concat(new Uint8Array([0x30]), encodeLength(inner.length), inner);
 }
 
 async function sign(data: string, key: CryptoKey): Promise<string> {
