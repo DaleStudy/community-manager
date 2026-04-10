@@ -15,58 +15,91 @@ export async function getInstallationToken(env: Env): Promise<string> {
         Accept: "application/vnd.github+json",
         "User-Agent": "DaleStudy-Community-Manager",
       },
-    }
+    },
   );
 
-  const tokenData = await tokenResponse.json() as any;
+  const tokenData = (await tokenResponse.json()) as any;
 
   if (!tokenData.token) {
-    throw new Error(`Failed to get installation token: ${JSON.stringify(tokenData)}`);
+    throw new Error(
+      `Failed to get installation token: ${JSON.stringify(tokenData)}`,
+    );
   }
 
   return tokenData.token;
 }
 
 /**
- * GitHub 후원 여부 확인 (GraphQL)
+ * GitHub 후원 여부 확인 (과거 후원 포함, GraphQL 페이지네이션)
  */
 export async function checkSponsorship(
   githubUsername: string,
   org: string,
-  token: string
+  token: string,
 ): Promise<boolean> {
   const query = `
-    query($login: String!, $org: String!) {
+    query($org: String!, $cursor: String) {
       organization(login: $org) {
-        isSponsoredBy(accountLogin: $login)
+        sponsorshipsAsMaintainer(first: 100, after: $cursor, activeOnly: false) {
+          nodes {
+            sponsorEntity {
+              ... on User { login }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
       }
     }
   `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": "DaleStudy-Community-Manager",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query, variables: { login: githubUsername, org } }),
-  });
+  let cursor: string | null = null;
 
-  const result = await response.json() as any;
+  while (true) {
+    const response = await fetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "DaleStudy-Community-Manager",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query, variables: { org, cursor } }),
+    });
 
-  if (result.errors) {
-    throw new Error(`GraphQL error: ${JSON.stringify(result.errors)}`);
+    const result = (await response.json()) as any;
+
+    if (result.errors) {
+      throw new Error(`GraphQL error: ${JSON.stringify(result.errors)}`);
+    }
+
+    const sponsorships = result.data?.organization?.sponsorshipsAsMaintainer;
+    const nodes = sponsorships?.nodes ?? [];
+
+    const found = nodes.some(
+      (n: any) =>
+        n.sponsorEntity?.login?.toLowerCase() === githubUsername.toLowerCase(),
+    );
+
+    if (found) return true;
+
+    if (!sponsorships?.pageInfo?.hasNextPage) break;
+
+    cursor = sponsorships.pageInfo.endCursor;
   }
 
-  return result.data?.organization?.isSponsoredBy === true;
+  return false;
 }
 
 /**
  * JWT 생성 (RS256)
  */
-async function createJWT(appId: string, privateKeyPem: string): Promise<string> {
+async function createJWT(
+  appId: string,
+  privateKeyPem: string,
+): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
 
   const header = { alg: "RS256", typ: "JWT" };
@@ -76,17 +109,27 @@ async function createJWT(appId: string, privateKeyPem: string): Promise<string> 
   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
 
   const privateKey = await importPrivateKey(privateKeyPem);
-  const signature = await sign(`${encodedHeader}.${encodedPayload}`, privateKey);
+  const signature = await sign(
+    `${encodedHeader}.${encodedPayload}`,
+    privateKey,
+  );
 
   return `${encodedHeader}.${encodedPayload}.${signature}`;
 }
 
 async function importPrivateKey(pem: string): Promise<CryptoKey> {
   const isPKCS8 = pem.includes("BEGIN PRIVATE KEY");
-  const pemHeader = isPKCS8 ? "-----BEGIN PRIVATE KEY-----" : "-----BEGIN RSA PRIVATE KEY-----";
-  const pemFooter = isPKCS8 ? "-----END PRIVATE KEY-----" : "-----END RSA PRIVATE KEY-----";
+  const pemHeader = isPKCS8
+    ? "-----BEGIN PRIVATE KEY-----"
+    : "-----BEGIN RSA PRIVATE KEY-----";
+  const pemFooter = isPKCS8
+    ? "-----END PRIVATE KEY-----"
+    : "-----END RSA PRIVATE KEY-----";
 
-  const pemContents = pem.replace(pemHeader, "").replace(pemFooter, "").replace(/\s/g, "");
+  const pemContents = pem
+    .replace(pemHeader, "")
+    .replace(pemFooter, "")
+    .replace(/\s/g, "");
   const pkcs1Der = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
 
   // GitHub App 키는 PKCS1 형식이므로 PKCS8로 변환
@@ -97,7 +140,7 @@ async function importPrivateKey(pem: string): Promise<CryptoKey> {
     keyData,
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
 }
 
@@ -112,17 +155,23 @@ function pkcs1ToPkcs8(pkcs1: Uint8Array): Uint8Array {
     const total = arrays.reduce((sum, a) => sum + a.length, 0);
     const result = new Uint8Array(total);
     let offset = 0;
-    for (const a of arrays) { result.set(a, offset); offset += a.length; }
+    for (const a of arrays) {
+      result.set(a, offset);
+      offset += a.length;
+    }
     return result;
   }
 
   const version = new Uint8Array([0x02, 0x01, 0x00]);
   const rsaOid = new Uint8Array([
-    0x30, 0x0d,
-    0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
-    0x05, 0x00,
+    0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01,
+    0x01, 0x05, 0x00,
   ]);
-  const octetString = concat(new Uint8Array([0x04]), encodeLength(pkcs1.length), pkcs1);
+  const octetString = concat(
+    new Uint8Array([0x04]),
+    encodeLength(pkcs1.length),
+    pkcs1,
+  );
   const inner = concat(version, rsaOid, octetString);
   return concat(new Uint8Array([0x30]), encodeLength(inner.length), inner);
 }
@@ -131,7 +180,7 @@ async function sign(data: string, key: CryptoKey): Promise<string> {
   const signature = await crypto.subtle.sign(
     "RSASSA-PKCS1-v1_5",
     key,
-    new TextEncoder().encode(data)
+    new TextEncoder().encode(data),
   );
   return base64UrlEncode(new Uint8Array(signature));
 }
