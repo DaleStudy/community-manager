@@ -29,21 +29,31 @@ export async function getInstallationToken(env: Env): Promise<string> {
   return tokenData.token;
 }
 
+export interface SponsorshipInfo {
+  sponsored: boolean;
+  lastSponsoredAt: string | null;
+  amountInDollars: number | null;
+}
+
 /**
- * GitHub 후원 여부 확인 (과거 후원 포함, GraphQL 페이지네이션)
+ * GitHub 후원 상세 정보 확인 (과거 후원 포함, GraphQL 페이지네이션)
  */
 export async function checkSponsorship(
   githubUsername: string,
   org: string,
   token: string,
-): Promise<boolean> {
+): Promise<SponsorshipInfo> {
   const query = `
     query($org: String!, $cursor: String) {
       organization(login: $org) {
         sponsorshipsAsMaintainer(first: 100, after: $cursor, activeOnly: false) {
           nodes {
+            createdAt
             sponsorEntity {
               ... on User { login }
+            }
+            tier {
+              monthlyPriceInDollars
             }
           }
           pageInfo {
@@ -56,6 +66,7 @@ export async function checkSponsorship(
   `;
 
   let cursor: string | null = null;
+  let latest: { createdAt: string; amountInDollars: number } | null = null;
 
   while (true) {
     const response = await fetch("https://api.github.com/graphql", {
@@ -78,19 +89,87 @@ export async function checkSponsorship(
     const sponsorships = result.data?.organization?.sponsorshipsAsMaintainer;
     const nodes = sponsorships?.nodes ?? [];
 
-    const found = nodes.some(
-      (n: any) =>
-        n.sponsorEntity?.login?.toLowerCase() === githubUsername.toLowerCase(),
-    );
-
-    if (found) return true;
+    for (const node of nodes) {
+      if (node.sponsorEntity?.login?.toLowerCase() !== githubUsername.toLowerCase()) continue;
+      if (!latest || node.createdAt > latest.createdAt) {
+        latest = {
+          createdAt: node.createdAt,
+          amountInDollars: node.tier?.monthlyPriceInDollars ?? 0,
+        };
+      }
+    }
 
     if (!sponsorships?.pageInfo?.hasNextPage) break;
-
     cursor = sponsorships.pageInfo.endCursor;
   }
 
-  return false;
+  if (!latest) {
+    return { sponsored: false, lastSponsoredAt: null, amountInDollars: null };
+  }
+
+  return {
+    sponsored: true,
+    lastSponsoredAt: latest.createdAt,
+    amountInDollars: latest.amountInDollars,
+  };
+}
+
+/**
+ * GitHub 팀 생성일 조회
+ */
+export async function getTeamCreatedAt(
+  org: string,
+  teamSlug: string,
+  token: string,
+): Promise<string> {
+  const response = await fetch(
+    `https://api.github.com/orgs/${org}/teams/${teamSlug}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "DaleStudy-Community-Manager",
+      },
+    },
+  );
+
+  const data = (await response.json()) as any;
+
+  if (!data.created_at) {
+    throw new Error(`Failed to get team info: ${JSON.stringify(data)}`);
+  }
+
+  return data.created_at;
+}
+
+/**
+ * GitHub 팀 멤버 추가 또는 초대
+ */
+export async function inviteToTeam(
+  org: string,
+  teamSlug: string,
+  username: string,
+  token: string,
+): Promise<"active" | "pending"> {
+  const response = await fetch(
+    `https://api.github.com/orgs/${org}/teams/${teamSlug}/memberships/${username}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "DaleStudy-Community-Manager",
+      },
+    },
+  );
+
+  const data = (await response.json()) as any;
+
+  if (!response.ok) {
+    throw new Error(`Failed to invite to team: ${JSON.stringify(data)}`);
+  }
+
+  return data.state;
 }
 
 /**

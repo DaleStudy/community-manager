@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { checkSponsorship, getInstallationToken } from "./github.js";
+import { checkSponsorship, getInstallationToken, getTeamCreatedAt, inviteToTeam } from "./github.js";
 import type { Env } from "./types.js";
 
 const mockEnv: Env = {
@@ -14,7 +14,7 @@ const mockEnv: Env = {
 };
 
 function makeSponsorshipResponse(
-  logins: string[],
+  sponsors: { login: string; createdAt?: string; amountInDollars?: number }[],
   hasNextPage = false,
   endCursor: string | null = null,
 ) {
@@ -24,8 +24,10 @@ function makeSponsorshipResponse(
         data: {
           organization: {
             sponsorshipsAsMaintainer: {
-              nodes: logins.map((login) => ({
+              nodes: sponsors.map(({ login, createdAt = "2024-01-01T00:00:00Z", amountInDollars = 5 }) => ({
+                createdAt,
                 sponsorEntity: { login },
+                tier: { monthlyPriceInDollars: amountInDollars },
               })),
               pageInfo: { hasNextPage, endCursor },
             },
@@ -40,61 +42,88 @@ beforeEach(() => {
 });
 
 describe("checkSponsorship", () => {
-  it("후원 중인 경우 true를 반환한다", async () => {
+  it("후원 이력이 없으면 sponsored: false를 반환한다", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(makeSponsorshipResponse(["octocat"])),
+      vi.fn().mockResolvedValue(makeSponsorshipResponse([{ login: "someone-else" }])),
     );
 
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
-    expect(result).toBe(true);
+    expect(result).toEqual({ sponsored: false, lastSponsoredAt: null, amountInDollars: null });
   });
 
-  it("대소문자 구분 없이 true를 반환한다", async () => {
+  it("후원 중인 경우 sponsored: true와 날짜/금액을 반환한다", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(makeSponsorshipResponse(["OctoCAT"])),
+      vi.fn().mockResolvedValue(
+        makeSponsorshipResponse([{ login: "octocat", createdAt: "2024-06-01T00:00:00Z", amountInDollars: 10 }]),
+      ),
     );
 
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
-    expect(result).toBe(true);
+    expect(result).toEqual({
+      sponsored: true,
+      lastSponsoredAt: "2024-06-01T00:00:00Z",
+      amountInDollars: 10,
+    });
   });
 
-  it("후원하지 않는 경우 false를 반환한다", async () => {
+  it("대소문자 구분 없이 일치하면 sponsored: true를 반환한다", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(makeSponsorshipResponse(["someone-else"])),
+      vi.fn().mockResolvedValue(makeSponsorshipResponse([{ login: "OctoCAT" }])),
     );
 
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
-    expect(result).toBe(false);
+    expect(result.sponsored).toBe(true);
   });
 
-  it("페이지네이션으로 다음 페이지에서 찾으면 true를 반환한다", async () => {
+  it("여러 후원 이력 중 가장 최근 날짜를 반환한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce(
+          makeSponsorshipResponse([
+            { login: "octocat", createdAt: "2024-01-01T00:00:00Z", amountInDollars: 5 },
+          ], true, "cursor1"),
+        )
+        .mockResolvedValueOnce(
+          makeSponsorshipResponse([
+            { login: "octocat", createdAt: "2024-09-01T00:00:00Z", amountInDollars: 10 },
+          ]),
+        ),
+    );
+
+    const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
+    expect(result.lastSponsoredAt).toBe("2024-09-01T00:00:00Z");
+    expect(result.amountInDollars).toBe(10);
+  });
+
+  it("페이지네이션으로 다음 페이지에서 찾으면 sponsored: true를 반환한다", async () => {
     const mockFetch = vi
       .fn()
       .mockResolvedValueOnce(
-        makeSponsorshipResponse(["alice", "bob"], true, "cursor1"),
+        makeSponsorshipResponse([{ login: "alice" }, { login: "bob" }], true, "cursor1"),
       )
-      .mockResolvedValueOnce(makeSponsorshipResponse(["octocat"]));
+      .mockResolvedValueOnce(makeSponsorshipResponse([{ login: "octocat" }]));
     vi.stubGlobal("fetch", mockFetch);
 
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
-    expect(result).toBe(true);
+    expect(result.sponsored).toBe(true);
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
-  it("모든 페이지 순회 후 없으면 false를 반환한다", async () => {
+  it("모든 페이지 순회 후 없으면 sponsored: false를 반환한다", async () => {
     const mockFetch = vi
       .fn()
       .mockResolvedValueOnce(
-        makeSponsorshipResponse(["alice"], true, "cursor1"),
+        makeSponsorshipResponse([{ login: "alice" }], true, "cursor1"),
       )
-      .mockResolvedValueOnce(makeSponsorshipResponse(["bob"]));
+      .mockResolvedValueOnce(makeSponsorshipResponse([{ login: "bob" }]));
     vi.stubGlobal("fetch", mockFetch);
 
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
-    expect(result).toBe(false);
+    expect(result.sponsored).toBe(false);
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
@@ -117,7 +146,7 @@ describe("checkSponsorship", () => {
   it("올바른 GraphQL 엔드포인트와 헤더로 요청한다", async () => {
     const mockFetch = vi
       .fn()
-      .mockResolvedValue(makeSponsorshipResponse(["octocat"]));
+      .mockResolvedValue(makeSponsorshipResponse([{ login: "octocat" }]));
     vi.stubGlobal("fetch", mockFetch);
 
     await checkSponsorship("octocat", "DaleStudy", "my-token");
@@ -125,6 +154,75 @@ describe("checkSponsorship", () => {
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe("https://api.github.com/graphql");
     expect(options.headers["Authorization"]).toBe("Bearer my-token");
+  });
+});
+
+describe("getTeamCreatedAt", () => {
+  it("팀 생성일을 반환한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        json: () => Promise.resolve({ created_at: "2024-03-01T00:00:00Z" }),
+      }),
+    );
+
+    const result = await getTeamCreatedAt("DaleStudy", "members", "test-token");
+    expect(result).toBe("2024-03-01T00:00:00Z");
+  });
+
+  it("팀 조회 실패 시 예외를 던진다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        json: () => Promise.resolve({ message: "Not Found" }),
+      }),
+    );
+
+    await expect(
+      getTeamCreatedAt("DaleStudy", "nonexistent", "test-token"),
+    ).rejects.toThrow("Failed to get team info");
+  });
+});
+
+describe("inviteToTeam", () => {
+  it("조직 멤버인 경우 active를 반환한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ state: "active" }),
+      }),
+    );
+
+    const result = await inviteToTeam("DaleStudy", "members", "octocat", "test-token");
+    expect(result).toBe("active");
+  });
+
+  it("조직 외부인인 경우 pending을 반환한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ state: "pending" }),
+      }),
+    );
+
+    const result = await inviteToTeam("DaleStudy", "members", "newuser", "test-token");
+    expect(result).toBe("pending");
+  });
+
+  it("API 실패 시 예외를 던진다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ message: "Not Found" }),
+      }),
+    );
+
+    await expect(
+      inviteToTeam("DaleStudy", "nonexistent", "octocat", "test-token"),
+    ).rejects.toThrow("Failed to invite to team");
   });
 });
 
