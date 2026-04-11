@@ -7,11 +7,13 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "register": "tsx scripts/register.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250407.0",
     "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0",
     "vitest": "^3.2.4",
     "wrangler": "^3.0.0"
