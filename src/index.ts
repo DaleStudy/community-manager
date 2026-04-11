@@ -31,9 +31,9 @@ export default {
     // APPLICATION_COMMAND
     if (interaction.type === 2) {
       ctx.waitUntil(
-        handleVerify(interaction, env).then((message) =>
-          editFollowup(env.DISCORD_APPLICATION_ID, interaction.token, message),
-        ),
+        handleVerify(interaction, env)
+          .then((message) => editFollowup(env.DISCORD_APPLICATION_ID, interaction.token, message))
+          .catch((err) => editFollowup(env.DISCORD_APPLICATION_ID, interaction.token, `⚠️ 오류가 발생했습니다: ${err?.message ?? "알 수 없는 오류"}`)),
       );
       return Response.json({ type: 5 });
     }
