@@ -1,6 +1,6 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam } from "./github.js";
-import { verifySignature } from "./discord.js";
+import { verifySignature, assignRole } from "./discord.js";
 
 export default {
   async fetch(
@@ -87,7 +87,11 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
     return `❌ 가장 최근 후원일(${sponsorship.lastSponsoredAt!.slice(0, 10)})이 팀 생성일(${teamCreatedAt.slice(0, 10)}) 이전입니다.`;
   }
 
-  const state = await inviteToTeam(env.GITHUB_ORG, teamConfig.teamSlug, githubUsername, token);
+  const discordUserId = interaction.member?.user?.id as string;
+  const [state] = await Promise.all([
+    inviteToTeam(env.GITHUB_ORG, teamConfig.teamSlug, githubUsername, token),
+    assignRole(env.DISCORD_GUILD_ID, discordUserId, roleConfig.discordRoleId, env.DISCORD_BOT_TOKEN),
+  ]);
 
   const amountLabel = `$${sponsorship.amount} one-time`;
 
