@@ -20,8 +20,8 @@ const command = {
     },
     {
       name: "discord_user_id",
-      description: "Discord 사용자 ID",
-      type: 3, // STRING
+      description: "Discord 사용자",
+      type: 6, // USER
       required: true,
     },
     {
