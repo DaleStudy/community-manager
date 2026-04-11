@@ -61,17 +61,23 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
     ?.value as string;
   const teamValue = options.find((o: any) => o.name === "team")
     ?.value as string;
+  const discordUserId = options.find((o: any) => o.name === "discord_user_id")?.value as string;
+
+  console.log(`[verify] github=${githubUsername} team=${teamValue} role=${roleValue} discordUserId=${discordUserId}`);
 
   const config: RoleTeamConfig[] = JSON.parse(env.ROLE_TEAM_CONFIG);
   const roleConfig = config.find((c) => c.value === roleValue);
   const teamConfig = config.find((c) => c.value === teamValue);
 
   if (!roleConfig || !teamConfig) {
+    console.log(`[verify] invalid role=${roleValue} or team=${teamValue}`);
     return "⚠️ 잘못된 role 또는 team 값입니다.";
   }
 
   const token = await getInstallationToken(env);
   const sponsorship = await checkSponsorship(githubUsername, env.GITHUB_ORG, env.GH_PAT);
+
+  console.log(`[verify] sponsorship=${JSON.stringify(sponsorship)}`);
 
   if (!sponsorship.sponsored) {
     return "❌ 해당 GitHub 계정의 후원 내역을 찾을 수 없습니다.";
@@ -83,15 +89,18 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
 
   const teamCreatedAt = await getTeamCreatedAt(env.GITHUB_ORG, teamConfig.teamSlug, token);
 
+  console.log(`[verify] teamCreatedAt=${teamCreatedAt} sponsoredAt=${sponsorship.lastSponsoredAt}`);
+
   if (sponsorship.lastSponsoredAt! < teamCreatedAt) {
     return `❌ 가장 최근 후원일(${sponsorship.lastSponsoredAt!.slice(0, 10)})이 팀 생성일(${teamCreatedAt.slice(0, 10)}) 이전입니다.`;
   }
 
-  const discordUserId = options.find((o: any) => o.name === "discord_user_id")?.value as string;
   const [state] = await Promise.all([
     inviteToTeam(env.GITHUB_ORG, teamConfig.teamSlug, githubUsername, token),
     assignRole(env.DISCORD_GUILD_ID, discordUserId, roleConfig.discordRoleId, env.DISCORD_BOT_TOKEN),
   ]);
+
+  console.log(`[verify] invited to team state=${state}, assigned Discord role=${roleConfig.discordRoleId}`);
 
   const amountLabel = `$${sponsorship.amount} one-time`;
 
