@@ -89,9 +89,11 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
 
   const state = await inviteToTeam(env.GITHUB_ORG, teamConfig.teamSlug, githubUsername, token);
 
+  const amountLabel = `$${sponsorship.amount} one-time`;
+
   if (state === "active") {
-    return "✅ 팀에 바로 추가되었습니다.";
+    return `✅ 팀에 바로 추가되었습니다. (후원 금액: ${amountLabel})`;
   }
 
-  return "✅ 초대 메일을 발송했습니다. 수락 후 팀에 합류됩니다.";
+  return `✅ 초대 메일을 발송했습니다. 수락 후 팀에 합류됩니다. (후원 금액: ${amountLabel})`;
 }
