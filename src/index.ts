@@ -77,6 +77,10 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
     return "❌ 해당 GitHub 계정의 후원 내역을 찾을 수 없습니다.";
   }
 
+  if (!sponsorship.isOneTimePayment || (sponsorship.amount ?? 0) < 5) {
+    return `❌ one-time $5 이상 후원자만 가입 가능합니다. (현재: ${sponsorship.isOneTimePayment ? `$${sponsorship.amount ?? 0} one-time` : "정기 후원"})`;
+  }
+
   const teamCreatedAt = await getTeamCreatedAt(env.GITHUB_ORG, teamConfig.teamSlug, token);
 
   if (sponsorship.lastSponsoredAt! < teamCreatedAt) {

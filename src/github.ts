@@ -32,6 +32,8 @@ export async function getInstallationToken(env: Env): Promise<string> {
 export interface SponsorshipInfo {
   sponsored: boolean;
   lastSponsoredAt: string | null;
+  isOneTimePayment: boolean | null;
+  amount: number | null;
 }
 
 /**
@@ -48,6 +50,8 @@ export async function checkSponsorship(
         sponsorshipsAsMaintainer(first: 100, after: $cursor, activeOnly: false) {
           nodes {
             createdAt
+            isOneTimePayment
+            tier { monthlyPriceInDollars }
             sponsorEntity {
               ... on User { login }
             }
@@ -63,6 +67,8 @@ export async function checkSponsorship(
 
   let cursor: string | null = null;
   let lastSponsoredAt: string | null = null;
+  let isOneTimePayment: boolean | null = null;
+  let amount: number | null = null;
 
   while (true) {
     const response = await fetch("https://api.github.com/graphql", {
@@ -87,8 +93,10 @@ export async function checkSponsorship(
 
     for (const node of nodes) {
       if (node.sponsorEntity?.login?.toLowerCase() !== githubUsername.toLowerCase()) continue;
-if (!lastSponsoredAt || node.createdAt > lastSponsoredAt) {
+      if (!lastSponsoredAt || node.createdAt > lastSponsoredAt) {
         lastSponsoredAt = node.createdAt;
+        isOneTimePayment = node.isOneTimePayment ?? null;
+        amount = node.tier?.monthlyPriceInDollars ?? null;
       }
     }
 
@@ -97,10 +105,10 @@ if (!lastSponsoredAt || node.createdAt > lastSponsoredAt) {
   }
 
   if (!lastSponsoredAt) {
-    return { sponsored: false, lastSponsoredAt: null };
+    return { sponsored: false, lastSponsoredAt: null, isOneTimePayment: null, amount: null };
   }
 
-  return { sponsored: true, lastSponsoredAt };
+  return { sponsored: true, lastSponsoredAt, isOneTimePayment, amount };
 }
 
 /**
