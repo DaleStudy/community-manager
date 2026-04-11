@@ -8,7 +8,7 @@
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
-    "register": "tsx scripts/register.ts"
+    "register": "tsx scripts/register-commands.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250407.0",
