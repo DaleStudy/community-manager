@@ -1,5 +1,6 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam } from "./github.js";
+import { verifySignature } from "./discord.js";
 
 export default {
   async fetch(
@@ -10,7 +11,15 @@ export default {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
+    const signature = request.headers.get("X-Signature-Ed25519") ?? "";
+    const timestamp = request.headers.get("X-Signature-Timestamp") ?? "";
     const body = await request.text();
+
+    const isValid = await verifySignature(env.DISCORD_PUBLIC_KEY, signature, timestamp, body);
+    if (!isValid) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     const interaction = JSON.parse(body);
 
     // PING
