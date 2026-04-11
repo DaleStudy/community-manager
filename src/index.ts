@@ -6,6 +6,7 @@ export default {
   async fetch(
     request: Request,
     env: Env,
+    ctx: ExecutionContext,
   ): Promise<Response> {
     if (request.method !== "POST") {
       return new Response("Method Not Allowed", { status: 405 });
@@ -29,13 +30,28 @@ export default {
 
     // APPLICATION_COMMAND
     if (interaction.type === 2) {
-      const message = await handleVerify(interaction, env);
-      return Response.json({ type: 4, data: { content: message } });
+      ctx.waitUntil(
+        handleVerify(interaction, env).then((message) =>
+          editFollowup(env.DISCORD_APPLICATION_ID, interaction.token, message),
+        ),
+      );
+      return Response.json({ type: 5 });
     }
 
     return new Response("Unknown interaction type", { status: 400 });
   },
 };
+
+async function editFollowup(applicationId: string, token: string, content: string): Promise<void> {
+  await fetch(
+    `https://discord.com/api/v10/webhooks/${applicationId}/${token}/messages/@original`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    },
+  );
+}
 
 async function handleVerify(interaction: any, env: Env): Promise<string> {
   const options = interaction.data?.options ?? [];
@@ -55,14 +71,10 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
   }
 
   const token = await getInstallationToken(env);
-  const sponsorship = await checkSponsorship(githubUsername, env.GITHUB_ORG, token);
+  const sponsorship = await checkSponsorship(githubUsername, env.GITHUB_ORG, env.GH_PAT);
 
   if (!sponsorship.sponsored) {
     return "❌ 해당 GitHub 계정의 후원 내역을 찾을 수 없습니다.";
-  }
-
-  if ((sponsorship.amountInDollars ?? 0) < 5) {
-    return `❌ 후원 금액이 $5 미만입니다. (현재: $${sponsorship.amountInDollars})`;
   }
 
   const teamCreatedAt = await getTeamCreatedAt(env.GITHUB_ORG, teamConfig.teamSlug, token);

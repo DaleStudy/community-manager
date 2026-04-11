@@ -32,11 +32,10 @@ export async function getInstallationToken(env: Env): Promise<string> {
 export interface SponsorshipInfo {
   sponsored: boolean;
   lastSponsoredAt: string | null;
-  amountInDollars: number | null;
 }
 
 /**
- * GitHub 후원 상세 정보 확인 (과거 후원 포함, GraphQL 페이지네이션)
+ * GitHub 후원 여부 확인 (과거 후원 포함, GraphQL 페이지네이션)
  */
 export async function checkSponsorship(
   githubUsername: string,
@@ -52,9 +51,6 @@ export async function checkSponsorship(
             sponsorEntity {
               ... on User { login }
             }
-            tier {
-              monthlyPriceInDollars
-            }
           }
           pageInfo {
             hasNextPage
@@ -66,7 +62,7 @@ export async function checkSponsorship(
   `;
 
   let cursor: string | null = null;
-  let latest: { createdAt: string; amountInDollars: number } | null = null;
+  let lastSponsoredAt: string | null = null;
 
   while (true) {
     const response = await fetch("https://api.github.com/graphql", {
@@ -91,11 +87,8 @@ export async function checkSponsorship(
 
     for (const node of nodes) {
       if (node.sponsorEntity?.login?.toLowerCase() !== githubUsername.toLowerCase()) continue;
-      if (!latest || node.createdAt > latest.createdAt) {
-        latest = {
-          createdAt: node.createdAt,
-          amountInDollars: node.tier?.monthlyPriceInDollars ?? 0,
-        };
+if (!lastSponsoredAt || node.createdAt > lastSponsoredAt) {
+        lastSponsoredAt = node.createdAt;
       }
     }
 
@@ -103,15 +96,11 @@ export async function checkSponsorship(
     cursor = sponsorships.pageInfo.endCursor;
   }
 
-  if (!latest) {
-    return { sponsored: false, lastSponsoredAt: null, amountInDollars: null };
+  if (!lastSponsoredAt) {
+    return { sponsored: false, lastSponsoredAt: null };
   }
 
-  return {
-    sponsored: true,
-    lastSponsoredAt: latest.createdAt,
-    amountInDollars: latest.amountInDollars,
-  };
+  return { sponsored: true, lastSponsoredAt };
 }
 
 /**

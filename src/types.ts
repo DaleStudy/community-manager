@@ -14,4 +14,6 @@ export interface Env {
   APP_INSTALLATION_ID: string;
   APP_PRIVATE_KEY: string;
   ROLE_TEAM_CONFIG: string;
+  GH_PAT: string;
+  DISCORD_APPLICATION_ID: string;
 }
