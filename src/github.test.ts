@@ -6,15 +6,17 @@ const mockEnv: Env = {
   DISCORD_PUBLIC_KEY: "test-public-key",
   DISCORD_BOT_TOKEN: "test-bot-token",
   DISCORD_GUILD_ID: "test-guild-id",
+  DISCORD_APPLICATION_ID: "test-app-id",
   GITHUB_ORG: "DaleStudy",
   APP_ID: "123456",
   APP_INSTALLATION_ID: "789",
   APP_PRIVATE_KEY: "",
   ROLE_TEAM_CONFIG: "[]",
+  GH_PAT: "test-pat",
 };
 
 function makeSponsorshipResponse(
-  sponsors: { login: string; createdAt?: string; amountInDollars?: number }[],
+  sponsors: { login: string; createdAt?: string; isOneTimePayment?: boolean; amount?: number }[],
   hasNextPage = false,
   endCursor: string | null = null,
 ) {
@@ -24,10 +26,11 @@ function makeSponsorshipResponse(
         data: {
           organization: {
             sponsorshipsAsMaintainer: {
-              nodes: sponsors.map(({ login, createdAt = "2024-01-01T00:00:00Z", amountInDollars = 5 }) => ({
+              nodes: sponsors.map(({ login, createdAt = "2024-01-01T00:00:00Z", isOneTimePayment = true, amount = 5 }) => ({
                 createdAt,
+                isOneTimePayment,
+                tier: { monthlyPriceInDollars: amount },
                 sponsorEntity: { login },
-                tier: { monthlyPriceInDollars: amountInDollars },
               })),
               pageInfo: { hasNextPage, endCursor },
             },
@@ -49,14 +52,14 @@ describe("checkSponsorship", () => {
     );
 
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
-    expect(result).toEqual({ sponsored: false, lastSponsoredAt: null, amountInDollars: null });
+    expect(result).toEqual({ sponsored: false, lastSponsoredAt: null, isOneTimePayment: null, amount: null });
   });
 
-  it("후원 중인 경우 sponsored: true와 날짜/금액을 반환한다", async () => {
+  it("후원 중인 경우 sponsored: true와 날짜를 반환한다", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        makeSponsorshipResponse([{ login: "octocat", createdAt: "2024-06-01T00:00:00Z", amountInDollars: 10 }]),
+        makeSponsorshipResponse([{ login: "octocat", createdAt: "2024-06-01T00:00:00Z" }]),
       ),
     );
 
@@ -64,7 +67,8 @@ describe("checkSponsorship", () => {
     expect(result).toEqual({
       sponsored: true,
       lastSponsoredAt: "2024-06-01T00:00:00Z",
-      amountInDollars: 10,
+      isOneTimePayment: true,
+      amount: 5,
     });
   });
 
@@ -84,19 +88,18 @@ describe("checkSponsorship", () => {
       vi.fn()
         .mockResolvedValueOnce(
           makeSponsorshipResponse([
-            { login: "octocat", createdAt: "2024-01-01T00:00:00Z", amountInDollars: 5 },
+            { login: "octocat", createdAt: "2024-01-01T00:00:00Z" },
           ], true, "cursor1"),
         )
         .mockResolvedValueOnce(
           makeSponsorshipResponse([
-            { login: "octocat", createdAt: "2024-09-01T00:00:00Z", amountInDollars: 10 },
+            { login: "octocat", createdAt: "2024-09-01T00:00:00Z" },
           ]),
         ),
     );
 
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
     expect(result.lastSponsoredAt).toBe("2024-09-01T00:00:00Z");
-    expect(result.amountInDollars).toBe(10);
   });
 
   it("페이지네이션으로 다음 페이지에서 찾으면 sponsored: true를 반환한다", async () => {

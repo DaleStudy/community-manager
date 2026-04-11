@@ -44,14 +44,18 @@ jobs:
             DISCORD_BOT_TOKEN
             DISCORD_GUILD_ID
             DISCORD_ROLE_ID
+            DISCORD_APPLICATION_ID
             APP_ID
             APP_INSTALLATION_ID
             APP_PRIVATE_KEY
+            GH_PAT
         env:
           DISCORD_PUBLIC_KEY: ${{ secrets.DISCORD_PUBLIC_KEY }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
           DISCORD_ROLE_ID: ${{ secrets.DISCORD_ROLE_ID }}
+          DISCORD_APPLICATION_ID: ${{ secrets.DISCORD_APPLICATION_ID }}
           APP_ID: ${{ secrets.APP_ID }}
           APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          GH_PAT: ${{ secrets.GH_PAT }}
