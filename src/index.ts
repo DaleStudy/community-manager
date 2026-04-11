@@ -87,7 +87,7 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
     return `❌ 가장 최근 후원일(${sponsorship.lastSponsoredAt!.slice(0, 10)})이 팀 생성일(${teamCreatedAt.slice(0, 10)}) 이전입니다.`;
   }
 
-  const discordUserId = interaction.member?.user?.id as string;
+  const discordUserId = options.find((o: any) => o.name === "discord_user_id")?.value as string;
   const [state] = await Promise.all([
     inviteToTeam(env.GITHUB_ORG, teamConfig.teamSlug, githubUsername, token),
     assignRole(env.DISCORD_GUILD_ID, discordUserId, roleConfig.discordRoleId, env.DISCORD_BOT_TOKEN),
