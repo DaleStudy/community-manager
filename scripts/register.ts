@@ -7,7 +7,9 @@ const ROLE_TEAM_CONFIG = process.env.ROLE_TEAM_CONFIG;
 
 if (!BOT_TOKEN || !APPLICATION_ID || !GUILD_ID || !ROLE_TEAM_CONFIG) {
   console.error("필요한 환경 변수가 설정되지 않았습니다.");
-  console.error("필요: DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID, DISCORD_GUILD_ID, ROLE_TEAM_CONFIG");
+  console.error(
+    "필요: DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID, DISCORD_GUILD_ID, ROLE_TEAM_CONFIG",
+  );
   process.exit(1);
 }
 

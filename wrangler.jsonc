@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "GITHUB_ORG": "DaleStudy",
-    "ROLE_TEAM_CONFIG": "[{\"value\":\"placeholder\",\"label\":\"Placeholder\",\"discordRoleId\":\"REPLACE_ME\",\"teamSlug\":\"REPLACE_ME\"}]",
+    "ROLE_TEAM_CONFIG": "[{\"value\":\"test\",\"label\":\"test\",\"discordRoleId\":\"1233209102495383572\",\"teamSlug\":\"test\"}]",
   },
   "kv_namespaces": [],
   "durable_objects": {
