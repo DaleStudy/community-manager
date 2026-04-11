@@ -1,5 +1,5 @@
 import type { Env, RoleTeamConfig } from "./types.js";
-import { getInstallationToken, checkSponsorship, getTeamCreatedAt } from "./github.js";
+import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam } from "./github.js";
 
 export default {
   async fetch(
@@ -62,6 +62,11 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
     return `❌ 가장 최근 후원일(${sponsorship.lastSponsoredAt!.slice(0, 10)})이 팀 생성일(${teamCreatedAt.slice(0, 10)}) 이전입니다.`;
   }
 
-  // TODO: 팀 초대 → 역할 부여
-  return "🔧 후원 확인됨. 팀 초대/역할 부여 구현 예정입니다.";
+  const state = await inviteToTeam(env.GITHUB_ORG, teamConfig.teamSlug, githubUsername, token);
+
+  if (state === "active") {
+    return "✅ 팀에 바로 추가되었습니다.";
+  }
+
+  return "✅ 초대 메일을 발송했습니다. 수락 후 팀에 합류됩니다.";
 }

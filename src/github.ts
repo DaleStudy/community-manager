@@ -143,6 +143,36 @@ export async function getTeamCreatedAt(
 }
 
 /**
+ * GitHub 팀 멤버 추가 또는 초대
+ */
+export async function inviteToTeam(
+  org: string,
+  teamSlug: string,
+  username: string,
+  token: string,
+): Promise<"active" | "pending"> {
+  const response = await fetch(
+    `https://api.github.com/orgs/${org}/teams/${teamSlug}/memberships/${username}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "DaleStudy-Community-Manager",
+      },
+    },
+  );
+
+  const data = (await response.json()) as any;
+
+  if (!response.ok) {
+    throw new Error(`Failed to invite to team: ${JSON.stringify(data)}`);
+  }
+
+  return data.state;
+}
+
+/**
  * JWT 생성 (RS256)
  */
 async function createJWT(

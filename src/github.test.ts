@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { checkSponsorship, getInstallationToken, getTeamCreatedAt } from "./github.js";
+import { checkSponsorship, getInstallationToken, getTeamCreatedAt, inviteToTeam } from "./github.js";
 import type { Env } from "./types.js";
 
 const mockEnv: Env = {
@@ -181,6 +181,48 @@ describe("getTeamCreatedAt", () => {
     await expect(
       getTeamCreatedAt("DaleStudy", "nonexistent", "test-token"),
     ).rejects.toThrow("Failed to get team info");
+  });
+});
+
+describe("inviteToTeam", () => {
+  it("조직 멤버인 경우 active를 반환한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ state: "active" }),
+      }),
+    );
+
+    const result = await inviteToTeam("DaleStudy", "members", "octocat", "test-token");
+    expect(result).toBe("active");
+  });
+
+  it("조직 외부인인 경우 pending을 반환한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ state: "pending" }),
+      }),
+    );
+
+    const result = await inviteToTeam("DaleStudy", "members", "newuser", "test-token");
+    expect(result).toBe("pending");
+  });
+
+  it("API 실패 시 예외를 던진다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ message: "Not Found" }),
+      }),
+    );
+
+    await expect(
+      inviteToTeam("DaleStudy", "nonexistent", "octocat", "test-token"),
+    ).rejects.toThrow("Failed to invite to team");
   });
 });
 
