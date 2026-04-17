@@ -83,16 +83,15 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
     return "❌ 해당 GitHub 계정의 후원 내역을 찾을 수 없습니다.";
   }
 
-  if (!sponsorship.isOneTimePayment || (sponsorship.amount ?? 0) < 5) {
-    return `❌ one-time $5 이상 후원자만 가입 가능합니다. (현재: ${sponsorship.isOneTimePayment ? `$${sponsorship.amount ?? 0} one-time` : "정기 후원"})`;
-  }
-
   const teamCreatedAt = await getTeamCreatedAt(env.GITHUB_ORG, teamConfig.teamSlug, token);
 
-  console.log(`[verify] teamCreatedAt=${teamCreatedAt} sponsoredAt=${sponsorship.lastSponsoredAt}`);
+  const eligibleRecords = sponsorship.records.filter((r) => r.createdAt >= teamCreatedAt);
+  const totalAmount = eligibleRecords.reduce((sum, r) => sum + r.amount, 0);
 
-  if (sponsorship.lastSponsoredAt! < teamCreatedAt) {
-    return `❌ 가장 최근 후원일(${sponsorship.lastSponsoredAt!.slice(0, 10)})이 팀 생성일(${teamCreatedAt.slice(0, 10)}) 이전입니다.`;
+  console.log(`[verify] teamCreatedAt=${teamCreatedAt} eligibleRecords=${eligibleRecords.length} totalAmount=${totalAmount}`);
+
+  if (totalAmount < 5) {
+    return `❌ 팀 생성일(${teamCreatedAt.slice(0, 10)}) 이후 후원 합계가 $5 미만입니다. (현재: $${totalAmount})`;
   }
 
   const existingMembership = await getTeamMembership(env.GITHUB_ORG, teamConfig.teamSlug, githubUsername, token);
@@ -104,7 +103,7 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
 
   console.log(`[verify] existingMembership=${existingMembership}, invited to team state=${state}, assigned Discord role=${roleConfig.discordRoleId}`);
 
-  const amountLabel = `$${sponsorship.amount} one-time`;
+  const amountLabel = `$${totalAmount}`;
 
   if (existingMembership === "active") {
     return `ℹ️ **${githubUsername}**님은 이미 **${teamConfig.teamSlug}** 팀의 멤버입니다. Discord 역할이 재부여되었습니다.`;
