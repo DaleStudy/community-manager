@@ -140,6 +140,32 @@ export async function getTeamCreatedAt(
 }
 
 /**
+ * GitHub 팀 멤버십 상태 조회
+ */
+export async function getTeamMembership(
+  org: string,
+  teamSlug: string,
+  username: string,
+  token: string,
+): Promise<"active" | "pending" | null> {
+  const response = await fetch(
+    `https://api.github.com/orgs/${org}/teams/${teamSlug}/memberships/${username}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "DaleStudy-Community-Manager",
+      },
+    },
+  );
+
+  if (response.status === 404) return null;
+
+  const data = (await response.json()) as any;
+  return data.state ?? null;
+}
+
+/**
  * GitHub 팀 멤버 추가 또는 초대
  */
 export async function inviteToTeam(
