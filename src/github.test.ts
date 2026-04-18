@@ -52,7 +52,7 @@ describe("checkSponsorship", () => {
     );
 
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
-    expect(result).toEqual({ sponsored: false, lastSponsoredAt: null, isOneTimePayment: null, amount: null });
+    expect(result).toEqual({ sponsored: false, records: [] });
   });
 
   it("후원 중인 경우 sponsored: true와 날짜를 반환한다", async () => {
@@ -66,9 +66,7 @@ describe("checkSponsorship", () => {
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
     expect(result).toEqual({
       sponsored: true,
-      lastSponsoredAt: "2024-06-01T00:00:00Z",
-      isOneTimePayment: true,
-      amount: 5,
+      records: [{ createdAt: "2024-06-01T00:00:00Z", isOneTimePayment: true, amount: 5 }],
     });
   });
 
@@ -99,7 +97,8 @@ describe("checkSponsorship", () => {
     );
 
     const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
-    expect(result.lastSponsoredAt).toBe("2024-09-01T00:00:00Z");
+    const dates = result.records.map((r) => r.createdAt);
+    expect(Math.max(...dates.map((d) => new Date(d).getTime()))).toBe(new Date("2024-09-01T00:00:00Z").getTime());
   });
 
   it("페이지네이션으로 다음 페이지에서 찾으면 sponsored: true를 반환한다", async () => {
