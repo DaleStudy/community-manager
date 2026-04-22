@@ -16,4 +16,5 @@ export interface Env {
   ROLE_TEAM_CONFIG: string;
   GH_PAT: string;
   DISCORD_APPLICATION_ID: string;
+  STUDY_JOIN_CHANNEL_ID: string;
 }
