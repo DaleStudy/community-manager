@@ -1,6 +1,6 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam, getTeamMembership } from "./github.js";
-import { verifySignature, assignRole } from "./discord.js";
+import { verifySignature, assignRole, getChannelMessages, replyToMessage, addReaction } from "./discord.js";
 
 export default {
   async fetch(
@@ -40,6 +40,10 @@ export default {
 
     return new Response("Unknown interaction type", { status: 400 });
   },
+
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(handleChannelJoin(env));
+  },
 };
 
 async function editFollowup(applicationId: string, token: string, content: string): Promise<void> {
@@ -65,6 +69,16 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
 
   console.log(`[verify] github=${githubUsername} team=${teamValue} role=${roleValue} discordUserId=${discordUserId}`);
 
+  return processVerify(githubUsername, teamValue, roleValue, discordUserId, env);
+}
+
+async function processVerify(
+  githubUsername: string,
+  teamValue: string,
+  roleValue: string,
+  discordUserId: string,
+  env: Env,
+): Promise<string> {
   const config: RoleTeamConfig[] = JSON.parse(env.ROLE_TEAM_CONFIG);
   const roleConfig = config.find((c) => c.value === roleValue);
   const teamConfig = config.find((c) => c.value === teamValue);
@@ -114,4 +128,83 @@ async function handleVerify(interaction: any, env: Env): Promise<string> {
   }
 
   return `✅ GitHub 연동 이메일로 팀 초대 메일이 발송되었습니다. 메일함을 확인하고 초대를 수락해주세요. (후원 금액: ${amountLabel})`;
+}
+
+interface ParsedJoinMessage {
+  githubUsername: string;
+  team: string;
+  role: string;
+}
+
+function parseJoinMessage(content: string): ParsedJoinMessage | null {
+  const fields: Record<string, string> = {};
+
+  for (const line of content.split("\n")) {
+    const colonIndex = line.indexOf(":");
+    if (colonIndex === -1) continue;
+    const key = line.slice(0, colonIndex).trim().toLowerCase();
+    const value = line.slice(colonIndex + 1).trim();
+    if (key && value) fields[key] = value;
+  }
+
+  const githubUsername = fields["github"];
+  const team = fields["team"];
+  const role = fields["role"];
+
+  if (!githubUsername || !team || !role) return null;
+
+  return { githubUsername, team, role };
+}
+
+async function handleChannelJoin(env: Env): Promise<void> {
+  const messages = await getChannelMessages(env.STUDY_JOIN_CHANNEL_ID, env.DISCORD_BOT_TOKEN, 50);
+
+  const unprocessed = messages.filter((msg) => {
+    if (msg.author?.bot) return false;
+    const hasCheckReaction = msg.reactions?.some(
+      (r: any) => r.emoji.name === "✅" && r.me,
+    );
+    return !hasCheckReaction;
+  });
+
+  console.log(`[cron] total=${messages.length} unprocessed=${unprocessed.length}`);
+
+  for (const msg of unprocessed) {
+    const parsed = parseJoinMessage(msg.content ?? "");
+
+    if (!parsed) {
+      console.log(`[cron] parse failed messageId=${msg.id}`);
+      await replyToMessage(
+        env.STUDY_JOIN_CHANNEL_ID,
+        msg.id,
+        "⚠️ 메시지 형식이 올바르지 않습니다. 아래 형식으로 다시 작성해주세요.\n```\ngithub: your_github_username\nteam: team_name\nrole: role_name\n```",
+        env.DISCORD_BOT_TOKEN,
+      );
+      await addReaction(env.STUDY_JOIN_CHANNEL_ID, msg.id, "❌", env.DISCORD_BOT_TOKEN);
+      continue;
+    }
+
+    console.log(`[cron] processing messageId=${msg.id} github=${parsed.githubUsername} team=${parsed.team} role=${parsed.role}`);
+
+    try {
+      const result = await processVerify(
+        parsed.githubUsername,
+        parsed.team,
+        parsed.role,
+        msg.author.id,
+        env,
+      );
+      await replyToMessage(env.STUDY_JOIN_CHANNEL_ID, msg.id, result, env.DISCORD_BOT_TOKEN);
+      await addReaction(env.STUDY_JOIN_CHANNEL_ID, msg.id, "✅", env.DISCORD_BOT_TOKEN);
+    } catch (err: any) {
+      console.error(`[cron] error messageId=${msg.id}`, err);
+      await replyToMessage(
+        env.STUDY_JOIN_CHANNEL_ID,
+        msg.id,
+        `⚠️ 오류가 발생했습니다: ${err?.message ?? "알 수 없는 오류"}`,
+        env.DISCORD_BOT_TOKEN,
+      );
+      await addReaction(env.STUDY_JOIN_CHANNEL_ID, msg.id, "❌", env.DISCORD_BOT_TOKEN);
+    }
+  }
 }

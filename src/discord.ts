@@ -48,6 +48,87 @@ export async function assignRole(
   }
 }
 
+/**
+ * Discord 채널 메시지 조회
+ */
+export async function getChannelMessages(
+  channelId: string,
+  botToken: string,
+  limit: number = 50,
+): Promise<any[]> {
+  const response = await fetch(
+    `https://discord.com/api/v10/channels/${channelId}/messages?limit=${limit}`,
+    {
+      headers: {
+        Authorization: `Bot ${botToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const data = await response.json() as any;
+    throw new Error(`Failed to get channel messages: ${JSON.stringify(data)}`);
+  }
+
+  return response.json() as Promise<any[]>;
+}
+
+/**
+ * Discord 메시지에 Reply 전송
+ */
+export async function replyToMessage(
+  channelId: string,
+  messageId: string,
+  content: string,
+  botToken: string,
+): Promise<void> {
+  const response = await fetch(
+    `https://discord.com/api/v10/channels/${channelId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content,
+        message_reference: { message_id: messageId },
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const data = await response.json() as any;
+    throw new Error(`Failed to reply to message: ${JSON.stringify(data)}`);
+  }
+}
+
+/**
+ * Discord 메시지에 Reaction 추가
+ */
+export async function addReaction(
+  channelId: string,
+  messageId: string,
+  emoji: string,
+  botToken: string,
+): Promise<void> {
+  const encoded = encodeURIComponent(emoji);
+  const response = await fetch(
+    `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}/reactions/${encoded}/@me`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bot ${botToken}`,
+      },
+    },
+  );
+
+  if (!response.ok && response.status !== 204) {
+    const data = await response.json() as any;
+    throw new Error(`Failed to add reaction: ${JSON.stringify(data)}`);
+  }
+}
+
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {

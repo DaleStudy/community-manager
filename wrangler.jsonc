@@ -20,7 +20,7 @@
     "consumers": [],
   },
   "triggers": {
-    "crons": [],
+    "crons": ["*/20 * * * *"],
   },
   "routes": [],
   "no_bundle": false,
