@@ -49,28 +49,49 @@ export async function assignRole(
 }
 
 /**
- * Discord 채널 메시지 조회
+ * Discord 포럼 채널의 포스트(스레드) 목록 및 첫 메시지 조회
  */
-export async function getChannelMessages(
-  channelId: string,
+export async function getForumPosts(
+  guildId: string,
+  forumChannelId: string,
   botToken: string,
-  limit: number = 50,
 ): Promise<any[]> {
-  const response = await fetch(
-    `https://discord.com/api/v10/channels/${channelId}/messages?limit=${limit}`,
-    {
-      headers: {
-        Authorization: `Bot ${botToken}`,
-      },
-    },
-  );
+  const headers = { Authorization: `Bot ${botToken}` };
 
-  if (!response.ok) {
-    const data = await response.json() as any;
-    throw new Error(`Failed to get channel messages: ${JSON.stringify(data)}`);
+  const [activeRes, archivedRes] = await Promise.all([
+    fetch(`https://discord.com/api/v10/guilds/${guildId}/threads/active`, { headers }),
+    fetch(`https://discord.com/api/v10/channels/${forumChannelId}/threads/archived/public?limit=50`, { headers }),
+  ]);
+
+  if (!activeRes.ok) {
+    const data = await activeRes.json() as any;
+    throw new Error(`Failed to get active threads: ${JSON.stringify(data)}`);
+  }
+  if (!archivedRes.ok) {
+    const data = await archivedRes.json() as any;
+    throw new Error(`Failed to get archived threads: ${JSON.stringify(data)}`);
   }
 
-  return response.json() as Promise<any[]>;
+  const activeData = await activeRes.json() as any;
+  const archivedData = await archivedRes.json() as any;
+
+  const activeThreads = (activeData.threads ?? []).filter((t: any) => t.parent_id === forumChannelId);
+  const archivedThreads = archivedData.threads ?? [];
+  const allThreads = [...activeThreads, ...archivedThreads];
+
+  const posts = await Promise.all(
+    allThreads.map(async (thread: any) => {
+      const msgRes = await fetch(
+        `https://discord.com/api/v10/channels/${thread.id}/messages/${thread.id}`,
+        { headers },
+      );
+      if (!msgRes.ok) return null;
+      const msg = await msgRes.json() as any;
+      return { ...msg, threadId: thread.id };
+    }),
+  );
+
+  return posts.filter(Boolean);
 }
 
 /**

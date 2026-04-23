@@ -1,6 +1,6 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam, getTeamMembership } from "./github.js";
-import { verifySignature, assignRole, getChannelMessages, replyToMessage, addReaction } from "./discord.js";
+import { verifySignature, assignRole, getForumPosts, replyToMessage, addReaction } from "./discord.js";
 
 export default {
   async fetch(
@@ -157,34 +157,32 @@ function parseJoinMessage(content: string): ParsedJoinMessage | null {
 }
 
 async function handleChannelJoin(env: Env): Promise<void> {
-  const messages = await getChannelMessages(env.STUDY_JOIN_CHANNEL_ID, env.DISCORD_BOT_TOKEN, 50);
+  const posts = await getForumPosts(env.DISCORD_GUILD_ID, env.STUDY_JOIN_CHANNEL_ID, env.DISCORD_BOT_TOKEN);
 
-  const unprocessed = messages.filter((msg) => {
+  const unprocessed = posts.filter((msg) => {
     if (msg.author?.bot) return false;
-    const hasCheckReaction = msg.reactions?.some(
-      (r: any) => r.emoji.name === "✅" && r.me,
-    );
-    return !hasCheckReaction;
+    return !msg.reactions?.length;
   });
 
-  console.log(`[cron] total=${messages.length} unprocessed=${unprocessed.length}`);
+  console.log(`[cron] total=${posts.length} unprocessed=${unprocessed.length}`);
 
   for (const msg of unprocessed) {
+    const threadId = msg.threadId as string;
     const parsed = parseJoinMessage(msg.content ?? "");
 
     if (!parsed) {
-      console.log(`[cron] parse failed messageId=${msg.id}`);
+      console.log(`[cron] parse failed threadId=${threadId}`);
       await replyToMessage(
-        env.STUDY_JOIN_CHANNEL_ID,
+        threadId,
         msg.id,
         "⚠️ 메시지 형식이 올바르지 않습니다. 아래 형식으로 다시 작성해주세요.\n```\ngithub: your_github_username\nteam: team_name\nrole: role_name\n```",
         env.DISCORD_BOT_TOKEN,
       );
-      await addReaction(env.STUDY_JOIN_CHANNEL_ID, msg.id, "❌", env.DISCORD_BOT_TOKEN);
+      await addReaction(threadId, msg.id, "❌", env.DISCORD_BOT_TOKEN);
       continue;
     }
 
-    console.log(`[cron] processing messageId=${msg.id} github=${parsed.githubUsername} team=${parsed.team} role=${parsed.role}`);
+    console.log(`[cron] processing threadId=${threadId} github=${parsed.githubUsername} team=${parsed.team} role=${parsed.role}`);
 
     try {
       const result = await processVerify(
@@ -194,17 +192,17 @@ async function handleChannelJoin(env: Env): Promise<void> {
         msg.author.id,
         env,
       );
-      await replyToMessage(env.STUDY_JOIN_CHANNEL_ID, msg.id, result, env.DISCORD_BOT_TOKEN);
-      await addReaction(env.STUDY_JOIN_CHANNEL_ID, msg.id, "✅", env.DISCORD_BOT_TOKEN);
+      await replyToMessage(threadId, msg.id, result, env.DISCORD_BOT_TOKEN);
+      await addReaction(threadId, msg.id, "✅", env.DISCORD_BOT_TOKEN);
     } catch (err: any) {
-      console.error(`[cron] error messageId=${msg.id}`, err);
+      console.error(`[cron] error threadId=${threadId}`, err);
       await replyToMessage(
-        env.STUDY_JOIN_CHANNEL_ID,
+        threadId,
         msg.id,
         `⚠️ 오류가 발생했습니다: ${err?.message ?? "알 수 없는 오류"}`,
         env.DISCORD_BOT_TOKEN,
       );
-      await addReaction(env.STUDY_JOIN_CHANNEL_ID, msg.id, "❌", env.DISCORD_BOT_TOKEN);
+      await addReaction(threadId, msg.id, "❌", env.DISCORD_BOT_TOKEN);
     }
   }
 }
