@@ -168,7 +168,9 @@ async function handleChannelJoin(env: Env): Promise<void> {
 
   for (const msg of unprocessed) {
     const threadId = msg.threadId as string;
-    const parsed = parseJoinMessage(msg.content ?? "");
+    const content = msg.content ?? "";
+    console.log(`[cron] threadId=${threadId} content=${JSON.stringify(content)}`);
+    const parsed = parseJoinMessage(content);
 
     if (!parsed) {
       console.log(`[cron] parse failed threadId=${threadId}`);
