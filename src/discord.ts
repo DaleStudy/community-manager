@@ -58,26 +58,15 @@ export async function getForumPosts(
 ): Promise<any[]> {
   const headers = { Authorization: `Bot ${botToken}` };
 
-  const [activeRes, archivedRes] = await Promise.all([
-    fetch(`https://discord.com/api/v10/guilds/${guildId}/threads/active`, { headers }),
-    fetch(`https://discord.com/api/v10/channels/${forumChannelId}/threads/archived/public?limit=50`, { headers }),
-  ]);
+  const activeRes = await fetch(`https://discord.com/api/v10/guilds/${guildId}/threads/active`, { headers });
 
   if (!activeRes.ok) {
     const data = await activeRes.json() as any;
     throw new Error(`Failed to get active threads: ${JSON.stringify(data)}`);
   }
-  if (!archivedRes.ok) {
-    const data = await archivedRes.json() as any;
-    throw new Error(`Failed to get archived threads: ${JSON.stringify(data)}`);
-  }
 
   const activeData = await activeRes.json() as any;
-  const archivedData = await archivedRes.json() as any;
-
-  const activeThreads = (activeData.threads ?? []).filter((t: any) => t.parent_id === forumChannelId);
-  const archivedThreads = archivedData.threads ?? [];
-  const allThreads = [...activeThreads, ...archivedThreads];
+  const allThreads = (activeData.threads ?? []).filter((t: any) => t.parent_id === forumChannelId);
 
   const posts = await Promise.all(
     allThreads.map(async (thread: any) => {
