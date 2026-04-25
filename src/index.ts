@@ -192,7 +192,8 @@ async function handleChannelJoin(env: Env): Promise<void> {
         env,
       );
       await replyToMessage(threadId, msg.id, result, env.DISCORD_BOT_TOKEN);
-      await addReaction(threadId, msg.id, "✅", env.DISCORD_BOT_TOKEN);
+      const reaction = result.startsWith("❌") || result.startsWith("⚠️") ? "❌" : "✅";
+      await addReaction(threadId, msg.id, reaction, env.DISCORD_BOT_TOKEN);
     } catch (err: any) {
       console.error(`[cron] error threadId=${threadId}`, err);
       await replyToMessage(
