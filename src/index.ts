@@ -137,23 +137,19 @@ interface ParsedJoinMessage {
 }
 
 function parseJoinMessage(content: string): ParsedJoinMessage | null {
-  const fields: Record<string, string> = {};
+  const normalized = content.replace(/：/g, ":");
 
-  for (const line of content.split("\n")) {
-    const colonIndex = line.indexOf(":");
-    if (colonIndex === -1) continue;
-    const key = line.slice(0, colonIndex).trim().toLowerCase();
-    const value = line.slice(colonIndex + 1).trim();
-    if (key && value) fields[key] = value;
-  }
+  const githubMatch = normalized.match(/\bgithub\s*:\s*([^\s:]+)/i);
+  const teamMatch = normalized.match(/\bteam\s*:\s*([^\s:]+)/i);
+  const roleMatch = normalized.match(/\brole\s*:\s*([^\s:]+)/i);
 
-  const githubUsername = fields["github"];
-  const team = fields["team"];
-  const role = fields["role"];
+  if (!githubMatch || !teamMatch || !roleMatch) return null;
 
-  if (!githubUsername || !team || !role) return null;
-
-  return { githubUsername, team, role };
+  return {
+    githubUsername: githubMatch[1],
+    team: teamMatch[1],
+    role: roleMatch[1],
+  };
 }
 
 async function handleChannelJoin(env: Env): Promise<void> {
@@ -169,15 +165,16 @@ async function handleChannelJoin(env: Env): Promise<void> {
   for (const msg of unprocessed) {
     const threadId = msg.threadId as string;
     const content = msg.content ?? "";
-    console.log(`[cron] threadId=${threadId} content=${JSON.stringify(content)}`);
-    const parsed = parseJoinMessage(content);
+    const threadName = msg.threadName ?? "";
+    console.log(`[cron] threadId=${threadId} content=${JSON.stringify(content)} threadName=${JSON.stringify(threadName)}`);
+    const parsed = parseJoinMessage(content) ?? parseJoinMessage(threadName);
 
     if (!parsed) {
       console.log(`[cron] parse failed threadId=${threadId}`);
       await replyToMessage(
         threadId,
         msg.id,
-        "⚠️ 메시지 형식이 올바르지 않습니다. 아래 형식으로 다시 작성해주세요.\n```\ngithub: your_github_username\nteam: team_name\nrole: role_name\n```",
+        "⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 한 줄로 작성해주세요.\n```\ngithub: username team: teamname role: rolename\n```",
         env.DISCORD_BOT_TOKEN,
       );
       await addReaction(threadId, msg.id, "❌", env.DISCORD_BOT_TOKEN);

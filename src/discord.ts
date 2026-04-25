@@ -71,12 +71,19 @@ export async function getForumPosts(
   const posts = await Promise.all(
     allThreads.map(async (thread: any) => {
       const msgRes = await fetch(
-        `https://discord.com/api/v10/channels/${thread.id}/messages/${thread.id}`,
+        `https://discord.com/api/v10/channels/${thread.id}/messages?limit=10`,
         { headers },
       );
-      if (!msgRes.ok) return null;
-      const msg = await msgRes.json() as any;
-      return { ...msg, threadId: thread.id };
+      if (!msgRes.ok) {
+        const err = await msgRes.json();
+        console.log(`[discord] failed to fetch messages threadId=${thread.id} status=${msgRes.status} err=${JSON.stringify(err)}`);
+        return null;
+      }
+      const messages = await msgRes.json() as any[];
+      console.log(`[discord] threadId=${thread.id} messageCount=${messages.length} contents=${JSON.stringify(messages.map((m: any) => ({ id: m.id, bot: m.author?.bot, content: m.content })))}`);
+      const msg = messages.reverse().find((m: any) => !m.author?.bot);
+      if (!msg) return null;
+      return { ...msg, threadId: thread.id, threadName: thread.name };
     }),
   );
 
