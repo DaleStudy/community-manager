@@ -138,14 +138,13 @@ interface ParsedJoinMessage {
 function parseJoinMessage(content: string): ParsedJoinMessage | null {
   const normalized = content.replace(/：/g, ":");
 
-  const githubMatch = normalized.match(/\bgithub_id\s*:\s*([^\s:]+)/i);
-  const teamMatch = normalized.match(/\bteam\s*:\s*([^\s:]+)/i);
+  const match = normalized.match(/\(\s*([^,)]+?)\s*,\s*([^)]+?)\s*\)/);
 
-  if (!githubMatch || !teamMatch) return null;
+  if (!match) return null;
 
   return {
-    githubUsername: githubMatch[1],
-    team: teamMatch[1],
+    githubUsername: match[1],
+    team: match[2],
   };
 }
 
@@ -171,7 +170,7 @@ async function handleChannelJoin(env: Env): Promise<void> {
       await replyToMessage(
         threadId,
         msg.id,
-        "⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 한 줄로 작성해주세요.\n```\ngithub_id: username team: teamname\n```",
+        "⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 작성해주세요.\n```\n리트코드 스터디 7기 신청 (github_username, team)\n```",
         env.DISCORD_BOT_TOKEN,
       );
       await addReaction(threadId, msg.id, "❌", env.DISCORD_BOT_TOKEN);
