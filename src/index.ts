@@ -133,22 +133,18 @@ async function processVerify(
 interface ParsedJoinMessage {
   githubUsername: string;
   team: string;
-  role: string;
 }
 
 function parseJoinMessage(content: string): ParsedJoinMessage | null {
   const normalized = content.replace(/：/g, ":");
 
-  const githubMatch = normalized.match(/\bgithub\s*:\s*([^\s:]+)/i);
-  const teamMatch = normalized.match(/\bteam\s*:\s*([^\s:]+)/i);
-  const roleMatch = normalized.match(/\brole\s*:\s*([^\s:]+)/i);
+  const match = normalized.match(/\(\s*([^,)]+?)\s*,\s*([^)]+?)\s*\)/);
 
-  if (!githubMatch || !teamMatch || !roleMatch) return null;
+  if (!match) return null;
 
   return {
-    githubUsername: githubMatch[1],
-    team: teamMatch[1],
-    role: roleMatch[1],
+    githubUsername: match[1],
+    team: match[2],
   };
 }
 
@@ -174,20 +170,20 @@ async function handleChannelJoin(env: Env): Promise<void> {
       await replyToMessage(
         threadId,
         msg.id,
-        "⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 한 줄로 작성해주세요.\n```\ngithub: username team: teamname role: rolename\n```",
+        "⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 작성해주세요.\n```\n리트코드 스터디 7기 신청 (github_username, team)\n```",
         env.DISCORD_BOT_TOKEN,
       );
       await addReaction(threadId, msg.id, "❌", env.DISCORD_BOT_TOKEN);
       continue;
     }
 
-    console.log(`[cron] processing threadId=${threadId} github=${parsed.githubUsername} team=${parsed.team} role=${parsed.role}`);
+    console.log(`[cron] processing threadId=${threadId} github=${parsed.githubUsername} team=${parsed.team}`);
 
     try {
       const result = await processVerify(
         parsed.githubUsername,
         parsed.team,
-        parsed.role,
+        parsed.team,
         msg.author.id,
         env,
       );
