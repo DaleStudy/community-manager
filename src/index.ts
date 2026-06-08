@@ -170,7 +170,7 @@ async function handleChannelJoin(env: Env): Promise<void> {
       await replyToMessage(
         threadId,
         msg.id,
-        "⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 작성해주세요.\n```\n리트코드 스터디 7기 신청 (github_username, team)\n```",
+        "⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 작성해주세요.\n```\n리트코드 스터디 8기 신청 (github_username, team)\n```",
         env.DISCORD_BOT_TOKEN,
       );
       await addReaction(threadId, msg.id, "❌", env.DISCORD_BOT_TOKEN);

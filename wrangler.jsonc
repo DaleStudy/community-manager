@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "GITHUB_ORG": "DaleStudy",
-    "ROLE_TEAM_CONFIG": "[{\"value\":\"leetcode07\",\"label\":\"leetcode07\",\"discordRoleId\":\"1233209102495383572\",\"teamSlug\":\"leetcode07\"}]",
+    "ROLE_TEAM_CONFIG": "[{\"value\":\"leetcode07\",\"label\":\"leetcode07\",\"discordRoleId\":\"1233209102495383572\",\"teamSlug\":\"leetcode07\"},{\"value\":\"leetcode08\",\"label\":\"leetcode08\",\"discordRoleId\":\"1513390176200818769\",\"teamSlug\":\"leetcode08\"}]",
   },
   "kv_namespaces": [],
   "durable_objects": {
