@@ -21,7 +21,7 @@ Discord API
     ▼
 Cloudflare Worker  ──────────────────────────────┐
     │                                             │
-    │  GraphQL: isSponsoredBy(org)                │
+    │  GraphQL: sponsorshipsAsMaintainer(org)     │
     ▼                                             │
 GitHub API (Sponsors)                             │
     │                                             │
@@ -36,7 +36,7 @@ GitHub API (Sponsors)                             │
 | ------------- | ----------------------------------------------------------------------- |
 | Runtime       | Cloudflare Workers (TypeScript)                                         |
 | Slash Command | Discord Interactions API                                                |
-| 후원 확인     | GitHub GraphQL API (`isOrganizationSponsoredBy`)                        |
+| 후원 확인     | GitHub GraphQL API (`sponsorshipsAsMaintainer`)                         |
 | 팀 초대       | GitHub REST API (`PUT /orgs/{org}/teams/{team}/memberships/{username}`) |
 | 역할 부여     | Discord REST API (`PUT /guilds/{guild}/members/{user}/roles/{role}`)    |
 | 배포          | Wrangler CLI                                                            |
