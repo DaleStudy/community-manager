@@ -21,7 +21,7 @@ Discord API
     ▼
 Cloudflare Worker  ──────────────────────────────┐
     │                                             │
-    │  GraphQL: isSponsoredBy(org)                │
+    │  GraphQL: sponsorshipsAsMaintainer(org)     │
     ▼                                             │
 GitHub API (Sponsors)                             │
     │                                             │
@@ -36,7 +36,7 @@ GitHub API (Sponsors)                             │
 | ------------- | ----------------------------------------------------------------------- |
 | Runtime       | Cloudflare Workers (TypeScript)                                         |
 | Slash Command | Discord Interactions API                                                |
-| 후원 확인     | GitHub GraphQL API (`isOrganizationSponsoredBy`)                        |
+| 후원 확인     | GitHub GraphQL API (`sponsorshipsAsMaintainer`)                         |
 | 팀 초대       | GitHub REST API (`PUT /orgs/{org}/teams/{team}/memberships/{username}`) |
 | 역할 부여     | Discord REST API (`PUT /guilds/{guild}/members/{user}/roles/{role}`)    |
 | 배포          | Wrangler CLI                                                            |
@@ -145,7 +145,7 @@ wrangler deploy
 
 `/verify` 실행 시 후원 조건을 아래 방식으로 검증합니다.
 
-- GitHub GraphQL API로 해당 유저의 **전체 후원 기록**을 조회합니다.
+- GitHub GraphQL API로 해당 유저의 **전체 후원 기록**을 조회합니다. (비공개 후원도 포함 — `sponsorshipsAsMaintainer(includePrivate: true)`)
 - 조회한 기록 중 **팀 생성일 이후**의 기록만 필터링합니다.
 - one-time 후원과 정기 후원을 구분하지 않고 **금액을 모두 합산**합니다.
 - 합산 금액이 **$5 이상**이면 검증 통과입니다.
