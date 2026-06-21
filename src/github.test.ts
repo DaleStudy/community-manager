@@ -13,6 +13,7 @@ const mockEnv: Env = {
   APP_PRIVATE_KEY: "",
   ROLE_TEAM_CONFIG: "[]",
   GH_PAT: "test-pat",
+  STUDY_JOIN_CHANNEL_ID: "test-channel-id",
 };
 
 function makeSponsorshipResponse(
@@ -156,6 +157,19 @@ describe("checkSponsorship", () => {
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe("https://api.github.com/graphql");
     expect(options.headers["Authorization"]).toBe("Bearer my-token");
+  });
+
+  it("비공개 후원도 포함하도록 includePrivate: true로 요청한다", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(makeSponsorshipResponse([{ login: "octocat" }]));
+    vi.stubGlobal("fetch", mockFetch);
+
+    await checkSponsorship("octocat", "DaleStudy", "my-token");
+
+    const [, options] = mockFetch.mock.calls[0];
+    const body = JSON.parse(options.body);
+    expect(body.query).toContain("includePrivate: true");
   });
 });
 

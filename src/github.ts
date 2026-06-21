@@ -51,7 +51,7 @@ export async function checkSponsorship(
   const query = `
     query($org: String!, $cursor: String) {
       organization(login: $org) {
-        sponsorshipsAsMaintainer(first: 100, after: $cursor, activeOnly: false) {
+        sponsorshipsAsMaintainer(first: 100, after: $cursor, activeOnly: false, includePrivate: true) {
           nodes {
             createdAt
             isOneTimePayment
