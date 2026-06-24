@@ -85,7 +85,8 @@ async function processVerify(
 
   if (!roleConfig || !teamConfig) {
     console.log(`[verify] invalid role=${roleValue} or team=${teamValue}`);
-    return "⚠️ 잘못된 role 또는 team 값입니다.";
+    const validTeams = config.map((c) => c.value).join(", ");
+    return `⚠️ 잘못된 team 값입니다: \`${teamValue}\`\n유효한 team: ${validTeams}\n포스트 **제목(title)** 을 아래 형식으로 작성해주세요. (두 번째 값은 닉네임이 아니라 팀 식별자입니다)\n\`\`\`\n리트코드 스터디 8기 신청 (github_username, team)\n\`\`\``;
   }
 
   const token = await getInstallationToken(env);
