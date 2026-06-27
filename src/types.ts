@@ -7,12 +7,12 @@ export interface RoleTeamConfig {
 
 export interface Env {
   DISCORD_PUBLIC_KEY: string;
-  DISCORD_BOT_TOKEN: string;
+  DISCORD_TOKEN: string;
   DISCORD_GUILD_ID: string;
   GITHUB_ORG: string;
-  APP_ID: string;
-  APP_INSTALLATION_ID: string;
-  APP_PRIVATE_KEY: string;
+  GITHUB_APP_ID: string;
+  GITHUB_APP_INSTALLATION_ID: string;
+  GITHUB_APP_PRIVATE_KEY: string;
   ROLE_TEAM_CONFIG: string;
   GH_PAT: string;
   DISCORD_APPLICATION_ID: string;

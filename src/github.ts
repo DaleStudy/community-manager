@@ -4,10 +4,10 @@ import type { Env } from "./types.js";
  * GitHub App Installation Token 발급
  */
 export async function getInstallationToken(env: Env): Promise<string> {
-  const jwt = await createJWT(env.APP_ID, env.APP_PRIVATE_KEY);
+  const jwt = await createJWT(env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
 
   const tokenResponse = await fetch(
-    `https://api.github.com/app/installations/${env.APP_INSTALLATION_ID}/access_tokens`,
+    `https://api.github.com/app/installations/${env.GITHUB_APP_INSTALLATION_ID}/access_tokens`,
     {
       method: "POST",
       headers: {

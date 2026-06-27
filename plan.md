@@ -162,7 +162,7 @@ community-manager/
 | Key                  | 설명                                       |
 | -------------------- | ------------------------------------------ |
 | `DISCORD_PUBLIC_KEY` | Discord App의 Ed25519 공개키 (서명 검증용) |
-| `DISCORD_BOT_TOKEN`  | Discord Bot Token                          |
+| `DISCORD_TOKEN`      | Discord Bot Token                          |
 | `DISCORD_GUILD_ID`   | 대상 Discord 서버 ID                       |
 | `APP_ID`             | GitHub App ID                              |
 | `APP_INSTALLATION_ID`| GitHub App의 조직 Installation ID          |
