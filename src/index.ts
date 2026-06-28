@@ -106,7 +106,7 @@ async function processVerify(
   console.log(`[verify] teamCreatedAt=${teamCreatedAt} eligibleRecords=${eligibleRecords.length} totalAmount=${totalAmount}`);
 
   if (totalAmount < 5) {
-    return `❌ 가장 최근 후원 금액($${totalAmount})이 $5 미만입니다. 여러 번 후원하셨다면 API 한계로 최근 1건만 확인됩니다. 운영자에게 문의해주세요.`;
+    return `❌ 팀 생성일 이후 후원 금액($${totalAmount})이 $5 미만입니다. 후원 내역이 맞다면 운영자에게 문의해주세요.`;
   }
 
   const existingMembership = await getTeamMembership(env.GITHUB_ORG, teamConfig.teamSlug, githubUsername, token);
