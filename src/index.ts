@@ -113,7 +113,7 @@ async function processVerify(
 
   const [state] = await Promise.all([
     inviteToTeam(env.GITHUB_ORG, teamConfig.teamSlug, githubUsername, token),
-    assignRole(env.DISCORD_GUILD_ID, discordUserId, roleConfig.discordRoleId, env.DISCORD_BOT_TOKEN),
+    assignRole(env.DISCORD_GUILD_ID, discordUserId, roleConfig.discordRoleId, env.DISCORD_TOKEN),
   ]);
 
   console.log(`[verify] existingMembership=${existingMembership}, invited to team state=${state}, assigned Discord role=${roleConfig.discordRoleId}`);
@@ -150,7 +150,7 @@ function parseJoinMessage(content: string): ParsedJoinMessage | null {
 }
 
 async function handleChannelJoin(env: Env): Promise<void> {
-  const posts = await getForumPosts(env.DISCORD_GUILD_ID, env.STUDY_JOIN_CHANNEL_ID, env.DISCORD_BOT_TOKEN);
+  const posts = await getForumPosts(env.DISCORD_GUILD_ID, env.STUDY_JOIN_CHANNEL_ID, env.DISCORD_TOKEN);
 
   const unprocessed = posts.filter((msg) => {
     if (msg.author?.bot) return false;
@@ -172,9 +172,9 @@ async function handleChannelJoin(env: Env): Promise<void> {
         threadId,
         msg.id,
         "⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 작성해주세요.\n```\n리트코드 스터디 8기 신청 (github_username, team)\n```",
-        env.DISCORD_BOT_TOKEN,
+        env.DISCORD_TOKEN,
       );
-      await addReaction(threadId, msg.id, "❌", env.DISCORD_BOT_TOKEN);
+      await addReaction(threadId, msg.id, "❌", env.DISCORD_TOKEN);
       continue;
     }
 
@@ -188,18 +188,18 @@ async function handleChannelJoin(env: Env): Promise<void> {
         msg.author.id,
         env,
       );
-      await replyToMessage(threadId, msg.id, result, env.DISCORD_BOT_TOKEN);
+      await replyToMessage(threadId, msg.id, result, env.DISCORD_TOKEN);
       const reaction = result.startsWith("❌") || result.startsWith("⚠️") ? "❌" : "✅";
-      await addReaction(threadId, msg.id, reaction, env.DISCORD_BOT_TOKEN);
+      await addReaction(threadId, msg.id, reaction, env.DISCORD_TOKEN);
     } catch (err: any) {
       console.error(`[cron] error threadId=${threadId}`, err);
       await replyToMessage(
         threadId,
         msg.id,
         `⚠️ 오류가 발생했습니다: ${err?.message ?? "알 수 없는 오류"}`,
-        env.DISCORD_BOT_TOKEN,
+        env.DISCORD_TOKEN,
       );
-      await addReaction(threadId, msg.id, "❌", env.DISCORD_BOT_TOKEN);
+      await addReaction(threadId, msg.id, "❌", env.DISCORD_TOKEN);
     }
   }
 }

@@ -64,20 +64,24 @@ community-manager/
 
 | Key                          | 설명                                       |
 | ---------------------------- | ------------------------------------------ |
-| `DISCORD_PUBLIC_KEY`         | Discord App의 Ed25519 공개키 (서명 검증용) |
-| `DISCORD_BOT_TOKEN`          | Discord Bot Token                          |
+| `DISCORD_PUBLIC_KEY`         | Discord App의 Ed25519 공개키, 서명 검증용 (조직 공용 봇) |
+| `DISCORD_TOKEN`              | Discord Bot Token (조직 공용 봇)           |
+| `DISCORD_APPLICATION_ID`     | Discord Application ID (조직 공용 봇)       |
 | `DISCORD_GUILD_ID`           | 대상 Discord 서버 ID                       |
-| `DISCORD_ROLE_ID`            | 부여할 역할 ID                             |
 | `GITHUB_APP_ID`              | GitHub App ID                              |
 | `GITHUB_APP_INSTALLATION_ID` | GitHub App의 조직 Installation ID          |
 | `GITHUB_APP_PRIVATE_KEY`     | GitHub App Private Key (PEM 형식)          |
+| `GH_PAT`                     | GitHub PAT (후원 조회 GraphQL용)           |
+| `STUDY_JOIN_CHANNEL_ID`      | 스터디 신청 포럼 채널 ID (cron 자동 처리)  |
+
+> **봇 자격증명 일원화**: `DISCORD_TOKEN`·`DISCORD_PUBLIC_KEY`·`DISCORD_APPLICATION_ID`는 커뮤니티 공용 봇(`DaleStudy`)의 **조직 레벨** 시크릿이며, CI(GitHub Actions) 배포 시 자동으로 주입됩니다. 저장소별로 개인 봇 자격증명을 따로 관리하지 않습니다.
 
 ### wrangler.jsonc vars (공개값, 커밋됨)
 
 | Key                | 설명              |
 | ------------------ | ----------------- |
-| `GITHUB_ORG`       | GitHub 조직 이름  |
-| `GITHUB_TEAM_SLUG` | 초대할 팀 slug    |
+| `GITHUB_ORG`       | GitHub 조직 이름                   |
+| `ROLE_TEAM_CONFIG` | 역할-팀 매핑 (JSON, 슬래시 선택지) |
 
 ### 로컬 개발 (.dev.vars)
 

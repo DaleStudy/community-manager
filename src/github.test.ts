@@ -4,13 +4,13 @@ import type { Env } from "./types.js";
 
 const mockEnv: Env = {
   DISCORD_PUBLIC_KEY: "test-public-key",
-  DISCORD_BOT_TOKEN: "test-bot-token",
+  DISCORD_TOKEN: "test-bot-token",
   DISCORD_GUILD_ID: "test-guild-id",
   DISCORD_APPLICATION_ID: "test-app-id",
   GITHUB_ORG: "DaleStudy",
-  APP_ID: "123456",
-  APP_INSTALLATION_ID: "789",
-  APP_PRIVATE_KEY: "",
+  GITHUB_APP_ID: "123456",
+  GITHUB_APP_INSTALLATION_ID: "789",
+  GITHUB_APP_PRIVATE_KEY: "",
   ROLE_TEAM_CONFIG: "[]",
   GH_PAT: "test-pat",
   STUDY_JOIN_CHANNEL_ID: "test-channel-id",

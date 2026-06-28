@@ -11,7 +11,7 @@ try {
 } catch {}
 
 const APPLICATION_ID = process.env.DISCORD_APPLICATION_ID!;
-const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN!;
+const BOT_TOKEN = process.env.DISCORD_TOKEN!;
 const GUILD_ID = process.env.DISCORD_GUILD_ID!;
 const ROLE_TEAM_CONFIG = JSON.parse(process.env.ROLE_TEAM_CONFIG!);
 
