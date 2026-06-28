@@ -51,7 +51,7 @@ jobs:
         env:
           DISCORD_PUBLIC_KEY: ${{ secrets.DISCORD_PUBLIC_KEY }}
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+          DISCORD_GUILD_ID: ${{ vars.DISCORD_GUILD_ID }}
           DISCORD_APPLICATION_ID: ${{ secrets.DISCORD_APPLICATION_ID }}
           # GitHub App: 코드/Worker는 GITHUB_APP_* 를 읽지만, 기존 저장소 secret 이름은 APP_* 라 여기서 매핑
           GITHUB_APP_ID: ${{ secrets.APP_ID }}
