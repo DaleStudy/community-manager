@@ -26,12 +26,11 @@ function makeSponsorshipResponse(
       Promise.resolve({
         data: {
           organization: {
-            sponsorshipsAsMaintainer: {
+            sponsorsActivities: {
               nodes: sponsors.map(({ login, createdAt = "2024-01-01T00:00:00Z", isOneTimePayment = true, amount = 5 }) => ({
-                createdAt,
-                isOneTimePayment,
-                tier: { monthlyPriceInDollars: amount },
-                sponsorEntity: { login },
+                timestamp: createdAt,
+                sponsorsTier: { monthlyPriceInDollars: amount, isOneTime: isOneTimePayment },
+                sponsor: { login },
               })),
               pageInfo: { hasNextPage, endCursor },
             },
@@ -170,6 +169,87 @@ describe("checkSponsorship", () => {
     const [, options] = mockFetch.mock.calls[0];
     const body = JSON.parse(options.body);
     expect(body.query).toContain("includePrivate: true");
+  });
+
+  it("sponsorsActivities를 NEW_SPONSORSHIP 액션으로 조회한다", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(makeSponsorshipResponse([{ login: "octocat" }]));
+    vi.stubGlobal("fetch", mockFetch);
+
+    await checkSponsorship("octocat", "DaleStudy", "my-token");
+
+    const [, options] = mockFetch.mock.calls[0];
+    const body = JSON.parse(options.body);
+    expect(body.query).toContain("sponsorsActivities");
+    expect(body.query).toContain("NEW_SPONSORSHIP");
+  });
+
+  it("결제 이벤트의 timestamp를 record의 createdAt으로 사용한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        makeSponsorshipResponse([{ login: "octocat", createdAt: "2026-06-27T09:00:00Z", amount: 5 }]),
+      ),
+    );
+
+    const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
+    expect(result.records).toEqual([
+      { createdAt: "2026-06-27T09:00:00Z", isOneTimePayment: true, amount: 5 },
+    ]);
+  });
+
+  it("재참여자의 반복 일시후원이 각각 별도 레코드로 집계된다", async () => {
+    // 같은 후원자가 지난 기수와 새 기수에 각각 일시후원한 경우,
+    // 두 결제가 각자의 timestamp로 별도 기록되어 호출부의 날짜 필터가 정확히 동작한다.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        makeSponsorshipResponse([
+          { login: "u-siop", createdAt: "2026-02-10T00:00:00Z", amount: 5 },
+          { login: "u-siop", createdAt: "2026-06-27T09:00:00Z", amount: 5 },
+        ]),
+      ),
+    );
+
+    const result = await checkSponsorship("u-siop", "DaleStudy", "test-token");
+    expect(result.sponsored).toBe(true);
+    expect(result.records).toHaveLength(2);
+    expect(result.records.map((r) => r.createdAt)).toEqual([
+      "2026-02-10T00:00:00Z",
+      "2026-06-27T09:00:00Z",
+    ]);
+  });
+
+  it("null 노드가 섞여 있어도 크래시 없이 건너뛴다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            data: {
+              organization: {
+                sponsorsActivities: {
+                  nodes: [
+                    null,
+                    {
+                      timestamp: "2026-06-27T00:00:00Z",
+                      sponsorsTier: { monthlyPriceInDollars: 5, isOneTime: true },
+                      sponsor: { login: "octocat" },
+                    },
+                    null,
+                  ],
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                },
+              },
+            },
+          }),
+      }),
+    );
+
+    const result = await checkSponsorship("octocat", "DaleStudy", "test-token");
+    expect(result.sponsored).toBe(true);
+    expect(result.records).toHaveLength(1);
   });
 });
 

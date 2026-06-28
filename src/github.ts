@@ -41,7 +41,11 @@ export interface SponsorshipInfo {
 }
 
 /**
- * GitHub 후원 여부 확인 (과거 후원 포함, GraphQL 페이지네이션)
+ * GitHub 후원 여부 확인
+ *
+ * 후원 "관계"가 아니라 결제 "이벤트"(NEW_SPONSORSHIP)를 조회한다. 각 결제의 실제 timestamp 를
+ * 쓰므로 반복 일시후원·재참여 후원을 결제일 기준으로 집계할 수 있다.
+ * (팀 생성일 이후만 합산하는 날짜 필터는 호출부에서 수행)
  */
 export async function checkSponsorship(
   githubUsername: string,
@@ -51,13 +55,13 @@ export async function checkSponsorship(
   const query = `
     query($org: String!, $cursor: String) {
       organization(login: $org) {
-        sponsorshipsAsMaintainer(first: 100, after: $cursor, activeOnly: false, includePrivate: true) {
+        sponsorsActivities(first: 100, after: $cursor, period: ALL, includePrivate: true, actions: [NEW_SPONSORSHIP]) {
           nodes {
-            createdAt
-            isOneTimePayment
-            tier { monthlyPriceInDollars }
-            sponsorEntity {
+            timestamp
+            sponsorsTier { monthlyPriceInDollars isOneTime }
+            sponsor {
               ... on User { login }
+              ... on Organization { login }
             }
           }
           pageInfo {
@@ -90,20 +94,20 @@ export async function checkSponsorship(
       throw new Error(`GraphQL error: ${JSON.stringify(result.errors)}`);
     }
 
-    const sponsorships = result.data?.organization?.sponsorshipsAsMaintainer;
-    const nodes = sponsorships?.nodes ?? [];
+    const activities = result.data?.organization?.sponsorsActivities;
+    const nodes = activities?.nodes ?? [];
 
     for (const node of nodes) {
-      if (node.sponsorEntity?.login?.toLowerCase() !== githubUsername.toLowerCase()) continue;
+      if (node?.sponsor?.login?.toLowerCase() !== githubUsername.toLowerCase()) continue;
       records.push({
-        createdAt: node.createdAt,
-        isOneTimePayment: node.isOneTimePayment ?? false,
-        amount: node.tier?.monthlyPriceInDollars ?? 0,
+        createdAt: node.timestamp,
+        isOneTimePayment: node.sponsorsTier?.isOneTime ?? false,
+        amount: node.sponsorsTier?.monthlyPriceInDollars ?? 0,
       });
     }
 
-    if (!sponsorships?.pageInfo?.hasNextPage) break;
-    cursor = sponsorships.pageInfo.endCursor;
+    if (!activities?.pageInfo?.hasNextPage) break;
+    cursor = activities.pageInfo.endCursor;
   }
 
   if (records.length === 0) {
