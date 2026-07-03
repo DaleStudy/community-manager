@@ -54,7 +54,7 @@ export default {
     if (event.cron === "0 0 * * MON") {
       ctx.waitUntil(handleBlogPublishCheck(env, event.scheduledTime));
     } else {
-      ctx.waitUntil(handleChannelJoin(env));
+      ctx.waitUntil(handleLeetCodeSignUp(env));
     }
   },
 };
@@ -162,7 +162,7 @@ function parseJoinMessage(content: string): ParsedJoinMessage | null {
   };
 }
 
-async function handleChannelJoin(env: Env): Promise<void> {
+async function handleLeetCodeSignUp(env: Env): Promise<void> {
   const posts = await getForumPosts(env.DISCORD_GUILD_ID, env.STUDY_JOIN_CHANNEL_ID, env.DISCORD_TOKEN);
 
   const unprocessed = posts.filter((msg) => {
