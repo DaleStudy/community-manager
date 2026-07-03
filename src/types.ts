@@ -17,4 +17,8 @@ export interface Env {
   GH_PAT: string;
   DISCORD_APPLICATION_ID: string;
   STUDY_JOIN_CHANNEL_ID: string;
+  /** 블로그 발행 체크: 스레드를 만들 부모 채널 ID */
+  BLOG_STUDY_CHANNEL_ID: string;
+  /** 블로그 발행 체크: 대상 'blog' 역할 ID */
+  BLOG_STUDY_ROLE_ID: string;
 }

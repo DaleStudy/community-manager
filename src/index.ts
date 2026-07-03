@@ -1,6 +1,14 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam, getTeamMembership } from "./github.js";
 import { verifySignature, assignRole, getForumPosts, replyToMessage, addReaction } from "./discord.js";
+import { buildThreadName, classify, computeWeekWindow } from "./blog.js";
+import {
+  collectFirstMessageTimes,
+  createPublicThread,
+  listRoleMembers,
+  newestThreadUnderParent,
+  postMessage,
+} from "./discord.js";
 
 export default {
   async fetch(
@@ -41,8 +49,13 @@ export default {
     return new Response("Unknown interaction type", { status: 400 });
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(handleChannelJoin(env));
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    // cron 패턴으로 분기: 블로그 발행 체크(월 09:00 KST = 월 00:00 UTC) vs 20분 주기 가입 처리
+    if (event.cron === "0 0 * * MON") {
+      ctx.waitUntil(handleBlogPublishCheck(env, event.scheduledTime));
+    } else {
+      ctx.waitUntil(handleChannelJoin(env));
+    }
   },
 };
 
@@ -202,4 +215,78 @@ async function handleChannelJoin(env: Env): Promise<void> {
       await addReaction(threadId, msg.id, "❌", env.DISCORD_TOKEN);
     }
   }
+}
+
+// ── 블로그 발행 체크(blog-study) 처리 ──────────────────────────────
+const ROLE_LABEL = "blog"; // 리포트 표시용 역할명
+
+function mentions(ids: string[]): string {
+  return ids.map((id) => `<@${id}>`).join(" ");
+}
+
+/** blog-study 원본 check_inactive_users 의 안내 문구. */
+function buildReport(warn: string[], late: string[]): string {
+  if (warn.length === 0 && late.length === 0) {
+    return `지난주 월요일 09:00부터 이번주 월요일 09:00까지 **${ROLE_LABEL}** 역할 대상자 모두 참여해서, 경고나 지각 대상자가 없습니다!`;
+  }
+
+  const parts: string[] = [];
+  if (warn.length > 0) {
+    parts.push(
+      `지난주 월요일 09:00부터 이번주 월요일 09:00까지, **${ROLE_LABEL}** 역할 대상자 중 이 채널에서 가장 최근에 만들어진 스레드에 메시지를 남기지 않아 **경고 1회**를 받은 사람들:\n${mentions(warn)}`,
+    );
+  }
+  if (late.length > 0) {
+    parts.push(
+      `이번주 월요일 00:00~09:00 사이에, **${ROLE_LABEL}** 역할 대상자 중 위 스레드에 처음으로 메시지를 남겨 **지각 1회**를 받은 사람들:\n${mentions(late)}`,
+    );
+  }
+  return parts.join("\n\n");
+}
+
+/**
+ * 매주 월요일 09:00(KST) 실행. 가장 최근 스레드 기준으로 blog 역할 대상자의
+ * 블로그 발행/지각을 판정해 리포트를 올리고, 이번 주에 쓸 새 스레드를 만든다.
+ */
+async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<void> {
+  const token = env.DISCORD_TOKEN;
+  const guildId = env.DISCORD_GUILD_ID;
+  const channelId = env.BLOG_STUDY_CHANNEL_ID;
+  const roleId = env.BLOG_STUDY_ROLE_ID;
+
+  const w = computeWeekWindow(referenceMs);
+  console.log(
+    `[blog] reference=${new Date(referenceMs).toISOString()} ` +
+      `window=[${new Date(w.lastMonday9Utc).toISOString()} .. ${new Date(w.thisMonday9Utc).toISOString()}]`,
+  );
+
+  const threadId = await newestThreadUnderParent(guildId, channelId, token);
+  if (!threadId) {
+    console.warn(`[blog] 부모 채널 ${channelId} 에 확인할 스레드가 없어 블로그 발행 체크를 건너뜁니다.`);
+  } else {
+    const firstTimes = await collectFirstMessageTimes(threadId, token, w.lastMonday9Utc, w.thisMonday9Utc);
+    const memberIds = await listRoleMembers(guildId, roleId, token);
+
+    const warn: string[] = [];
+    const late: string[] = [];
+    for (const id of memberIds) {
+      switch (classify(firstTimes.get(id), w)) {
+        case "late":
+          late.push(id);
+          break;
+        case "warn":
+          warn.push(id);
+          break;
+        // "normal" → 정상 참여, 아무것도 하지 않음
+      }
+    }
+
+    await postMessage(channelId, buildReport(warn, late), token);
+    console.log(`[blog] report 게시 완료 warn=${warn.length} late=${late.length}`);
+  }
+
+  // 이번 주에 쓸 새 스레드 생성 (스레드 유무와 무관하게 항상 생성)
+  const name = buildThreadName(referenceMs);
+  await createPublicThread(channelId, name, token);
+  console.log(`[blog] 스레드 생성 완료 "${name}"`);
 }

@@ -7,6 +7,8 @@
   "vars": {
     "GITHUB_ORG": "DaleStudy",
     "ROLE_TEAM_CONFIG": "[{\"value\":\"leetcode07\",\"label\":\"leetcode07\",\"discordRoleId\":\"1474508579523268701\",\"teamSlug\":\"leetcode07\"},{\"value\":\"leetcode08\",\"label\":\"leetcode08\",\"discordRoleId\":\"1513390176200818769\",\"teamSlug\":\"leetcode08\"}]",
+    "BLOG_STUDY_CHANNEL_ID": "1513687699729416232",
+    "BLOG_STUDY_ROLE_ID": "1520796867355611247",
   },
   "kv_namespaces": [],
   "durable_objects": {
@@ -20,7 +22,8 @@
     "consumers": [],
   },
   "triggers": {
-    "crons": ["*/20 * * * *"],
+    // "*/20 * * * *": 가입 처리 / "0 0 * * MON"(월 00:00 UTC = 09:00 KST): 블로그 발행 체크
+    "crons": ["*/20 * * * *", "0 0 * * MON"],
   },
   "routes": [],
   "no_bundle": false,
