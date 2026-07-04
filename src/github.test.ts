@@ -14,6 +14,8 @@ const mockEnv: Env = {
   ROLE_TEAM_CONFIG: "[]",
   GH_PAT: "test-pat",
   STUDY_JOIN_CHANNEL_ID: "test-channel-id",
+  BLOG_STUDY_CHANNEL_ID: "test-blog-channel-id",
+  BLOG_STUDY_ROLE_ID: "test-blog-role-id",
 };
 
 function makeSponsorshipResponse(

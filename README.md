@@ -6,7 +6,11 @@ Discord slash command `/verify <github_username>` → GitHub 후원 확인 → G
 
 ## 개요
 
-이 프로젝트는 Discord 서버에서 `/verify <github_username>` 명령을 통해 사용자의 GitHub 후원 여부를 확인하고, 후원자인 경우 자동으로 GitHub 조직 팀에 초대하고 Discord 역할(Role)을 부여하는 Cloudflare Worker 기반 봇입니다.
+DaleStudy 커뮤니티 운영을 자동화하는 Cloudflare Worker 기반 Discord 봇입니다. 하나의 Worker가 세 가지 작업을 처리합니다.
+
+1. **`/verify` 슬래시 명령**: 사용자의 GitHub 후원 여부를 확인해, 후원자인 경우 GitHub 조직 팀에 초대하고 Discord 역할(Role)을 부여합니다.
+2. **리트코드 스터디 가입 처리** (cron, 20분 주기): 스터디 신청 포럼에 올라온 글을 폴링해 위 검증 로직을 자동 적용합니다.
+3. **블로그 발행 체크** (cron, 매주 월요일 09:00 KST): `blog` 역할 대상자가 이번 주 블로그를 발행(주간 스레드에 글 작성)했는지 확인해 리포트를 올리고 다음 주 스레드를 만듭니다.
 
 ## 아키텍처
 
@@ -30,6 +34,14 @@ GitHub API (Sponsors)                             │
     └─ 후원 O ──► Discord REST API (역할 부여) ───┘
 ```
 
+위 그림은 `/verify` 인터랙션(`fetch` 핸들러) 흐름입니다. 이와 별개로, 봇은 **Cron Trigger로 두 가지 작업**을 `scheduled` 핸들러에서 주기적으로 실행하며 `event.cron` 값으로 분기합니다.
+
+```
+Cloudflare Cron ──► Worker.scheduled(event.cron)
+   */20 * * * *  ──► handleLeetCodeSignUp      (신청 포럼 폴링 → 후원 검증 재사용)
+   0 0 * * MON   ──► handleBlogPublishCheck     (blog 역할 발행 체크 → 리포트 + 새 스레드)
+```
+
 ## 기술 스택
 
 | Layer         | Technology                                                              |
@@ -49,6 +61,7 @@ community-manager/
 │   ├── index.ts          # Cloudflare Worker entry point
 │   ├── discord.ts        # Discord 서명 검증, API 호출
 │   ├── github.ts         # GitHub GraphQL/REST API 호출
+│   ├── blog.ts           # 블로그 발행 체크 로직 (KST 주간 경계·발행 상태 분류)
 │   └── types.ts          # 공통 타입 정의
 ├── scripts/
 │   └── register.ts       # Discord slash command 등록 스크립트
@@ -82,6 +95,8 @@ community-manager/
 | ------------------ | ----------------- |
 | `GITHUB_ORG`       | GitHub 조직 이름                   |
 | `ROLE_TEAM_CONFIG` | 역할-팀 매핑 (JSON, 슬래시 선택지) |
+| `BLOG_STUDY_CHANNEL_ID` | 블로그 발행 체크: 주간 스레드 부모 채널 ID |
+| `BLOG_STUDY_ROLE_ID`    | 블로그 발행 체크: 대상 `blog` 역할 ID       |
 
 ### 로컬 개발 (.dev.vars)
 
@@ -142,6 +157,7 @@ wrangler deploy
 - **GitHub App 권한**: 후원 확인(GraphQL)과 팀 초대(REST) 모두 처리. Organization Members: Read & Write 권한 필요
 - **Bot 역할 위치**: Discord에서 Bot이 부여할 역할보다 높은 위치에 있어야 함
 - **중복 실행 방지**: PUT 방식으로 멱등성 보장
+- **블로그 발행 체크**: 역할 보유자 열거(`GET /guilds/{id}/members`)에 GUILD_MEMBERS(privileged) 인텐트 필요. 주간 cron은 매주 1회 단일 실행이라 동시성 경합 없음
 
 ## 주요 동작 상세
 
@@ -171,6 +187,28 @@ wrangler deploy
 | 이미 활성 멤버 | `ℹ️ 이미 팀의 멤버입니다. Discord 역할이 재부여되었습니다.` |
 | 신규 초대 (org 멤버) | `✅ GitHub 팀 초대가 완료되었습니다.` |
 | 신규 초대 (외부 유저) | `✅ 팀 초대 메일이 발송되었습니다.` |
+
+### 리트코드 스터디 가입 자동 처리 (cron)
+
+20분 주기(`*/20 * * * *`)로 스터디 신청 포럼(`STUDY_JOIN_CHANNEL_ID`)을 폴링합니다. 아직 처리되지 않은(리액션 없는) 신청 글의 제목/본문에서 `(github_username, team)`을 파싱해 위 후원 검증 로직을 적용하고, 결과를 답글 + ✅/❌ 리액션으로 남깁니다.
+
+### 블로그 발행 체크 (주간 cron)
+
+매주 월요일 09:00 KST(`0 0 * * MON`)에 실행되어, `blog` 역할 대상자가 이번 주 블로그를 발행(주간 스레드에 글 작성)했는지 확인합니다.
+
+- 대상 채널(`BLOG_STUDY_CHANNEL_ID`)에서 **가장 최근에 만들어진 스레드**를 찾습니다.
+- `blog` 역할 보유자(봇 제외)를 열거하고, 각자가 그 스레드에 남긴 **첫 메시지 시각**으로 분류합니다.
+
+| 상태 | 기준 (KST) | 처리 |
+|---|---|---|
+| 정상 발행 | 이번 주 월 00:00 이전 작성 | (조용히 통과) |
+| 지각 | 이번 주 월 00:00 ~ 09:00 첫 작성 | 리포트에 지각 표기 |
+| 경고 | 미작성 | 리포트에 경고 표기 |
+
+- 판정 결과를 채널에 리포트로 게시하고, **다음 주에 쓸 새 스레드**를 생성합니다.
+- 첫 실행 시엔 확인할 스레드가 없어 스레드 생성만 하고(부트스트랩), 다음 주부터 직전 스레드를 검사합니다.
+
+> 주간 판정 창(지난 월 09:00 ~ 이번 월 09:00)과 분류 로직은 [`src/blog.ts`](src/blog.ts)에 있고, 경계는 단위 테스트([`src/blog.test.ts`](src/blog.test.ts))로 검증합니다.
 
 ## 라이선스
 
