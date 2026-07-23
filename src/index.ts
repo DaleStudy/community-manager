@@ -1,15 +1,8 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam, getTeamMembership } from "./github.js";
 import { verifySignature, assignRole, getForumPosts, replyToMessage, addReaction } from "./discord.js";
-import { buildThreadName, classify, computeWeekWindow } from "./blog.js";
-import {
-  collectFirstMessageTimes,
-  createPublicThread,
-  getBotUserId,
-  listRoleMembers,
-  newestThreadUnderParent,
-  postMessage,
-} from "./discord.js";
+import { buildWeekLabel, classify, computeWeekWindow } from "./blog.js";
+import { collectFirstPostTimes, listRoleMembers, postMessage } from "./discord.js";
 
 export default {
   async fetch(
@@ -225,8 +218,8 @@ function mentions(ids: string[]): string {
   return ids.map((id) => `<@${id}>`).join(" ");
 }
 
-/** blog-study 원본 check_inactive_users 의 안내 문구. */
-function buildReport(warn: string[], late: string[]): string {
+/** blog-study 원본 check_inactive_users 의 안내 문구를 포럼 게시 기준으로 다듬은 것. */
+function buildReport(forumChannelId: string, warn: string[], late: string[]): string {
   if (warn.length === 0 && late.length === 0) {
     return `지난주 월요일 09:00부터 이번주 월요일 09:00까지 **${ROLE_LABEL}** 역할 대상자 모두 참여해서, 경고나 지각 대상자가 없습니다!`;
   }
@@ -234,25 +227,27 @@ function buildReport(warn: string[], late: string[]): string {
   const parts: string[] = [];
   if (warn.length > 0) {
     parts.push(
-      `지난주 월요일 09:00부터 이번주 월요일 09:00까지, **${ROLE_LABEL}** 역할 대상자 중 봇이 이 채널에 가장 최근에 만든 스레드에 메시지를 남기지 않아 **경고 1회**를 받은 사람들:\n${mentions(warn)}`,
+      `지난주 월요일 09:00부터 이번주 월요일 09:00까지, **${ROLE_LABEL}** 역할 대상자 중 <#${forumChannelId}> 포럼에 글을 게시하지 않아 **경고 1회**를 받은 사람들:\n${mentions(warn)}`,
     );
   }
   if (late.length > 0) {
     parts.push(
-      `이번주 월요일 00:00~09:00 사이에, **${ROLE_LABEL}** 역할 대상자 중 위 스레드에 처음으로 메시지를 남겨 **지각 1회**를 받은 사람들:\n${mentions(late)}`,
+      `이번주 월요일 00:00~09:00 사이에, **${ROLE_LABEL}** 역할 대상자 중 <#${forumChannelId}> 포럼에 처음으로 글을 게시해 **지각 1회**를 받은 사람들:\n${mentions(late)}`,
     );
   }
   return parts.join("\n\n");
 }
 
 /**
- * 매주 월요일 09:00(KST) 실행. 봇이 만든 가장 최근 스레드 기준으로 blog 역할
- * 대상자의 블로그 발행/지각을 판정해 리포트를 올리고, 이번 주에 쓸 새 스레드를 만든다.
+ * 매주 월요일 09:00(KST) 실행. 블로그글-공유 포럼에 지난 한 주 동안 올라온 게시글을
+ * 기준으로 blog 역할 대상자의 블로그 발행/지각을 판정해 리포트를 올리고,
+ * 새 주 시작 안내 메시지를 게시한다.
  */
 async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<void> {
   const token = env.DISCORD_TOKEN;
   const guildId = env.DISCORD_GUILD_ID;
   const channelId = env.BLOG_STUDY_CHANNEL_ID;
+  const forumChannelId = env.BLOG_STUDY_FORUM_ID;
   const roleId = env.BLOG_STUDY_ROLE_ID;
 
   const w = computeWeekWindow(referenceMs);
@@ -261,34 +256,28 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
       `window=[${new Date(w.lastMonday9Utc).toISOString()} .. ${new Date(w.thisMonday9Utc).toISOString()}]`,
   );
 
-  const botUserId = await getBotUserId(token);
-  const threadId = await newestThreadUnderParent(guildId, channelId, botUserId, token);
-  if (!threadId) {
-    console.warn(`[blog] 부모 채널 ${channelId} 에 봇이 만든 스레드가 없어 블로그 발행 체크를 건너뜁니다.`);
-  } else {
-    const firstTimes = await collectFirstMessageTimes(threadId, token, w.lastMonday9Utc, w.thisMonday9Utc);
-    const memberIds = await listRoleMembers(guildId, roleId, token);
+  const firstTimes = await collectFirstPostTimes(guildId, forumChannelId, token, w.lastMonday9Utc, w.thisMonday9Utc);
+  const memberIds = await listRoleMembers(guildId, roleId, token);
 
-    const warn: string[] = [];
-    const late: string[] = [];
-    for (const id of memberIds) {
-      switch (classify(firstTimes.get(id), w)) {
-        case "late":
-          late.push(id);
-          break;
-        case "warn":
-          warn.push(id);
-          break;
-        // "normal" → 정상 참여, 아무것도 하지 않음
-      }
+  const warn: string[] = [];
+  const late: string[] = [];
+  for (const id of memberIds) {
+    switch (classify(firstTimes.get(id), w)) {
+      case "late":
+        late.push(id);
+        break;
+      case "warn":
+        warn.push(id);
+        break;
+      // "normal" → 정상 참여, 아무것도 하지 않음
     }
-
-    await postMessage(channelId, buildReport(warn, late), token);
-    console.log(`[blog] report 게시 완료 warn=${warn.length} late=${late.length}`);
   }
 
-  // 이번 주에 쓸 새 스레드 생성 (스레드 유무와 무관하게 항상 생성)
-  const name = buildThreadName(referenceMs);
-  await createPublicThread(channelId, name, token);
-  console.log(`[blog] 스레드 생성 완료 "${name}"`);
+  await postMessage(channelId, buildReport(forumChannelId, warn, late), token);
+  console.log(`[blog] report 게시 완료 warn=${warn.length} late=${late.length}`);
+
+  // 새 주 시작 안내
+  const label = buildWeekLabel(referenceMs);
+  await postMessage(channelId, `${label}\n이번 주 블로그 글은 <#${forumChannelId}> 포럼에 새 게시글로 올려주세요!`, token);
+  console.log(`[blog] 주간 안내 게시 완료 "${label}"`);
 }

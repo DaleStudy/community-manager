@@ -38,20 +38,20 @@ export function computeWeekWindow(referenceMs: number): WeekWindow {
 export type BlogStatus = "normal" | "late" | "warn";
 
 /**
- * 한 대상자의 "첫 메시지 시각"(없으면 undefined)으로 블로그 발행 상태를 판정한다.
- * - normal: 이번주 월 00:00(KST) 이전에 작성 (정상 발행)
- * - late:   이번주 월 00:00~09:00(KST) 사이 첫 작성 (지각)
- * - warn:   미작성 또는 그 외 (경고)
+ * 한 대상자의 "첫 게시글 시각"(없으면 undefined)으로 블로그 발행 상태를 판정한다.
+ * - normal: 이번주 월 00:00(KST) 이전에 게시 (정상 발행)
+ * - late:   이번주 월 00:00~09:00(KST) 사이 첫 게시 (지각)
+ * - warn:   미게시 또는 그 외 (경고)
  */
-export function classify(firstMessageMs: number | undefined, w: WeekWindow): BlogStatus {
-  if (firstMessageMs === undefined) return "warn";
-  if (firstMessageMs < w.thisMondayMidnightUtc) return "normal";
-  if (firstMessageMs >= w.thisMondayMidnightUtc && firstMessageMs <= w.thisMonday9Utc) return "late";
+export function classify(firstPostMs: number | undefined, w: WeekWindow): BlogStatus {
+  if (firstPostMs === undefined) return "warn";
+  if (firstPostMs < w.thisMondayMidnightUtc) return "normal";
+  if (firstPostMs >= w.thisMondayMidnightUtc && firstPostMs <= w.thisMonday9Utc) return "late";
   return "warn";
 }
 
-/** 스레드 제목용 "블로그 MM/DD - MM/DD" (KST 기준, 기준 주 월~일) */
-export function buildThreadName(referenceMs: number): string {
+/** 주간 안내용 라벨 "블로그 MM/DD - MM/DD" (KST 기준, 기준 주 월~일) */
+export function buildWeekLabel(referenceMs: number): string {
   const start = new Date(referenceMs + KST_OFFSET_MS);
   const end = new Date(start.getTime() + 6 * DAY_MS);
   return `블로그 ${fmtMonthDay(start)} - ${fmtMonthDay(end)}`;
