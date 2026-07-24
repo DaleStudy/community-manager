@@ -5,6 +5,7 @@ import { buildThreadName, classify, computeWeekWindow } from "./blog.js";
 import {
   collectFirstMessageTimes,
   createPublicThread,
+  getBotUserId,
   listRoleMembers,
   newestThreadUnderParent,
   postMessage,
@@ -233,7 +234,7 @@ function buildReport(warn: string[], late: string[]): string {
   const parts: string[] = [];
   if (warn.length > 0) {
     parts.push(
-      `지난주 월요일 09:00부터 이번주 월요일 09:00까지, **${ROLE_LABEL}** 역할 대상자 중 이 채널에서 가장 최근에 만들어진 스레드에 메시지를 남기지 않아 **경고 1회**를 받은 사람들:\n${mentions(warn)}`,
+      `지난주 월요일 09:00부터 이번주 월요일 09:00까지, **${ROLE_LABEL}** 역할 대상자 중 봇이 이 채널에 가장 최근에 만든 스레드에 메시지를 남기지 않아 **경고 1회**를 받은 사람들:\n${mentions(warn)}`,
     );
   }
   if (late.length > 0) {
@@ -245,8 +246,8 @@ function buildReport(warn: string[], late: string[]): string {
 }
 
 /**
- * 매주 월요일 09:00(KST) 실행. 가장 최근 스레드 기준으로 blog 역할 대상자의
- * 블로그 발행/지각을 판정해 리포트를 올리고, 이번 주에 쓸 새 스레드를 만든다.
+ * 매주 월요일 09:00(KST) 실행. 봇이 만든 가장 최근 스레드 기준으로 blog 역할
+ * 대상자의 블로그 발행/지각을 판정해 리포트를 올리고, 이번 주에 쓸 새 스레드를 만든다.
  */
 async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<void> {
   const token = env.DISCORD_TOKEN;
@@ -260,9 +261,10 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
       `window=[${new Date(w.lastMonday9Utc).toISOString()} .. ${new Date(w.thisMonday9Utc).toISOString()}]`,
   );
 
-  const threadId = await newestThreadUnderParent(guildId, channelId, token);
+  const botUserId = await getBotUserId(token);
+  const threadId = await newestThreadUnderParent(guildId, channelId, botUserId, token);
   if (!threadId) {
-    console.warn(`[blog] 부모 채널 ${channelId} 에 확인할 스레드가 없어 블로그 발행 체크를 건너뜁니다.`);
+    console.warn(`[blog] 부모 채널 ${channelId} 에 봇이 만든 스레드가 없어 블로그 발행 체크를 건너뜁니다.`);
   } else {
     const firstTimes = await collectFirstMessageTimes(threadId, token, w.lastMonday9Utc, w.thisMonday9Utc);
     const memberIds = await listRoleMembers(guildId, roleId, token);
