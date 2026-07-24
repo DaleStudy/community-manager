@@ -177,20 +177,31 @@ async function ensureOk(res: Response, what: string): Promise<void> {
 // NEWS(10) / PUBLIC(11) / PRIVATE(12) 스레드
 const THREAD_TYPES = new Set([10, 11, 12]);
 
+/** 봇 자신의 사용자 ID — 봇이 만든 스레드를 가려낼 때 쓴다. */
+export async function getBotUserId(token: string): Promise<string> {
+  const res = await fetch(`${API}/users/@me`, { headers: authHeaders(token) });
+  await ensureOk(res, "봇 사용자 조회");
+  const me = (await res.json()) as any;
+  return me.id as string;
+}
+
 /**
- * 부모 채널 아래 스레드 중 가장 최근에 생성된(스레드 ID 최대) 것의 ID.
+ * 부모 채널 아래 ownerId가 만든 스레드 중 가장 최근에 생성된(스레드 ID 최대) 것의 ID.
+ * 멤버가 임의로 만든 스레드가 주간 스레드를 가로채지 않도록 소유자를 제한한다.
  * 활성 스레드(길드) + 보관된 공개 스레드(채널)를 모두 본다.
  * 스레드 ID는 snowflake(64bit)라 BigInt로 비교한다.
  */
 export async function newestThreadUnderParent(
   guildId: string,
   channelId: string,
+  ownerId: string,
   token: string,
 ): Promise<string | null> {
   const headers = authHeaders(token);
   let best: bigint | null = null;
-  const consider = (id: string) => {
-    const v = BigInt(id);
+  const consider = (t: any) => {
+    if (t.owner_id !== ownerId || !THREAD_TYPES.has(t.type)) return;
+    const v = BigInt(t.id);
     if (best === null || v > best) best = v;
   };
 
@@ -199,7 +210,7 @@ export async function newestThreadUnderParent(
   await ensureOk(activeRes, "활성 스레드 조회");
   const active = (await activeRes.json()) as any;
   for (const t of active.threads ?? []) {
-    if (t.parent_id === channelId && THREAD_TYPES.has(t.type)) consider(t.id);
+    if (t.parent_id === channelId) consider(t);
   }
 
   // 보관된 공개 스레드 (archive_timestamp 기준 페이지네이션)
@@ -213,7 +224,7 @@ export async function newestThreadUnderParent(
     const page = (await res.json()) as any;
     const threads: any[] = page.threads ?? [];
     if (threads.length === 0) break;
-    for (const t of threads) if (THREAD_TYPES.has(t.type)) consider(t.id);
+    for (const t of threads) consider(t);
     if (!page.has_more) break;
     before = threads[threads.length - 1]?.thread_metadata?.archive_timestamp;
     if (!before) break;
