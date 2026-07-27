@@ -174,53 +174,51 @@ async function ensureOk(res: Response, what: string): Promise<void> {
   }
 }
 
-// NEWS(10) / PUBLIC(11) / PRIVATE(12) 스레드
-const THREAD_TYPES = new Set([10, 11, 12]);
+/** Discord snowflake epoch (2015-01-01T00:00:00Z, UTC ms) */
+const DISCORD_EPOCH_MS = 1420070400000;
 
-/** 봇 자신의 사용자 ID — 봇이 만든 스레드를 가려낼 때 쓴다. */
-export async function getBotUserId(token: string): Promise<string> {
-  const res = await fetch(`${API}/users/@me`, { headers: authHeaders(token) });
-  await ensureOk(res, "봇 사용자 조회");
-  const me = (await res.json()) as any;
-  return me.id as string;
+/** snowflake ID에 인코딩된 생성 시각 (UTC ms) */
+export function snowflakeToMs(id: string): number {
+  return Number(BigInt(id) >> 22n) + DISCORD_EPOCH_MS;
 }
 
 /**
- * 부모 채널 아래 ownerId가 만든 스레드 중 가장 최근에 생성된(스레드 ID 최대) 것의 ID.
- * 멤버가 임의로 만든 스레드가 주간 스레드를 가로채지 않도록 소유자를 제한한다.
- * 활성 스레드(길드) + 보관된 공개 스레드(채널)를 모두 본다.
- * 스레드 ID는 snowflake(64bit)라 BigInt로 비교한다.
+ * 포럼 채널의 게시글(스레드)을 훑어, [lastMonday9, thisMonday9] 창 안에 만들어진
+ * 각 사람의 "첫 게시글 생성 시각(ms)"을 수집한다.
+ * 생성 시각은 게시글 ID(snowflake)에서 얻으므로 메시지 내용은 전혀 읽지 않는다.
+ * 활성 게시글(길드) + 보관된 게시글(채널)을 모두 본다.
  */
-export async function newestThreadUnderParent(
+export async function collectFirstPostTimes(
   guildId: string,
-  channelId: string,
-  ownerId: string,
+  forumChannelId: string,
   token: string,
-): Promise<string | null> {
+  lastMonday9Ms: number,
+  thisMonday9Ms: number,
+): Promise<Map<string, number>> {
   const headers = authHeaders(token);
-  let best: bigint | null = null;
+  const firstByUser = new Map<string, number>();
   const consider = (t: any) => {
-    if (t.owner_id !== ownerId || !THREAD_TYPES.has(t.type)) return;
-    const v = BigInt(t.id);
-    if (best === null || v > best) best = v;
+    if (t.parent_id !== forumChannelId || !t.owner_id) return;
+    const ts = snowflakeToMs(t.id);
+    if (ts < lastMonday9Ms || ts > thisMonday9Ms) return;
+    const prev = firstByUser.get(t.owner_id);
+    if (prev === undefined || ts < prev) firstByUser.set(t.owner_id, ts);
   };
 
-  // 활성 스레드
+  // 활성 게시글
   const activeRes = await fetch(`${API}/guilds/${guildId}/threads/active`, { headers });
-  await ensureOk(activeRes, "활성 스레드 조회");
+  await ensureOk(activeRes, "활성 게시글 조회");
   const active = (await activeRes.json()) as any;
-  for (const t of active.threads ?? []) {
-    if (t.parent_id === channelId) consider(t);
-  }
+  for (const t of active.threads ?? []) consider(t);
 
-  // 보관된 공개 스레드 (archive_timestamp 기준 페이지네이션)
+  // 보관된 게시글 (archive_timestamp 기준 페이지네이션)
   let before: string | undefined;
   while (true) {
-    const url = new URL(`${API}/channels/${channelId}/threads/archived/public`);
+    const url = new URL(`${API}/channels/${forumChannelId}/threads/archived/public`);
     url.searchParams.set("limit", "100");
     if (before) url.searchParams.set("before", before);
     const res = await fetch(url, { headers });
-    await ensureOk(res, "보관 스레드 조회");
+    await ensureOk(res, "보관 게시글 조회");
     const page = (await res.json()) as any;
     const threads: any[] = page.threads ?? [];
     if (threads.length === 0) break;
@@ -228,46 +226,6 @@ export async function newestThreadUnderParent(
     if (!page.has_more) break;
     before = threads[threads.length - 1]?.thread_metadata?.archive_timestamp;
     if (!before) break;
-  }
-
-  return best === null ? null : best.toString();
-}
-
-/**
- * 스레드 메시지를 [lastMonday9, thisMonday9] 창에서 읽어
- * 각 사람(비봇)의 "첫(최소) 메시지 시각(ms)"을 수집한다.
- * Discord 메시지 목록은 최신순이라, 창보다 과거에 도달하면 중단한다.
- */
-export async function collectFirstMessageTimes(
-  threadId: string,
-  token: string,
-  lastMonday9Ms: number,
-  thisMonday9Ms: number,
-): Promise<Map<string, number>> {
-  const headers = authHeaders(token);
-  const firstByUser = new Map<string, number>();
-  let before: string | undefined;
-
-  outer: while (true) {
-    const url = new URL(`${API}/channels/${threadId}/messages`);
-    url.searchParams.set("limit", "100");
-    if (before) url.searchParams.set("before", before);
-    const res = await fetch(url, { headers });
-    await ensureOk(res, "스레드 메시지 조회");
-    const messages = (await res.json()) as any[];
-    if (messages.length === 0) break;
-
-    for (const msg of messages) {
-      const ts = Date.parse(msg.timestamp);
-      if (ts < lastMonday9Ms) break outer; // 창보다 과거 → 종료
-      if (ts > thisMonday9Ms) continue; // 창보다 미래 → 무시
-      if (msg.author?.bot) continue;
-      const uid = msg.author.id as string;
-      const prev = firstByUser.get(uid);
-      if (prev === undefined || ts < prev) firstByUser.set(uid, ts);
-    }
-
-    before = messages[messages.length - 1].id; // 이 페이지에서 가장 오래된 메시지
   }
 
   return firstByUser;
@@ -312,18 +270,4 @@ export async function postMessage(channelId: string, content: string, token: str
     body: JSON.stringify({ content, allowed_mentions: { parse: ["users"] } }),
   });
   await ensureOk(res, "메시지 전송");
-}
-
-/** 채널에 공개 스레드 생성 (메시지 없이, 7일 보관) */
-export async function createPublicThread(
-  channelId: string,
-  name: string,
-  token: string,
-): Promise<void> {
-  const res = await fetch(`${API}/channels/${channelId}/threads`, {
-    method: "POST",
-    headers: { ...authHeaders(token), "Content-Type": "application/json" },
-    body: JSON.stringify({ name, type: 11, auto_archive_duration: 10080 }),
-  });
-  await ensureOk(res, "스레드 생성");
 }

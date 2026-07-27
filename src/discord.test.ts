@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import { webcrypto } from "node:crypto";
-import { newestThreadUnderParent, verifySignature } from "./discord.js";
+import { snowflakeToMs, verifySignature } from "./discord.js";
 
 beforeAll(() => {
   vi.stubGlobal("crypto", webcrypto);
@@ -71,58 +71,11 @@ describe("verifySignature", () => {
   });
 });
 
-describe("newestThreadUnderParent", () => {
-  const BOT = "bot-1";
-  const CH = "channel-1";
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  function stubFetch(activeThreads: unknown[], archivedThreads: unknown[] = []): void {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.includes("/threads/active")) {
-        return Response.json({ threads: activeThreads });
-      }
-      if (url.includes("/threads/archived/public")) {
-        return Response.json({ threads: archivedThreads, has_more: false });
-      }
-      throw new Error(`예상치 못한 요청: ${url}`);
-    });
-  }
-
-  it("멤버가 만든 더 새로운 스레드를 무시하고 봇이 만든 최신 스레드를 고른다", async () => {
-    stubFetch([
-      { id: "300", parent_id: CH, type: 11, owner_id: "user-1" },
-      { id: "200", parent_id: CH, type: 11, owner_id: BOT },
-      { id: "100", parent_id: CH, type: 11, owner_id: BOT },
-    ]);
-
-    expect(await newestThreadUnderParent("guild-1", CH, BOT, "token")).toBe("200");
-  });
-
-  it("다른 채널에 있는 봇 스레드는 고려하지 않는다", async () => {
-    stubFetch([
-      { id: "300", parent_id: "other-channel", type: 11, owner_id: BOT },
-      { id: "200", parent_id: CH, type: 11, owner_id: BOT },
-    ]);
-
-    expect(await newestThreadUnderParent("guild-1", CH, BOT, "token")).toBe("200");
-  });
-
-  it("보관된 봇 스레드도 후보에 포함한다", async () => {
-    stubFetch(
-      [{ id: "100", parent_id: CH, type: 11, owner_id: BOT }],
-      [{ id: "200", parent_id: CH, type: 11, owner_id: BOT }],
+describe("snowflakeToMs", () => {
+  it("운영 봇 메시지 ID의 생성 시각과 일치한다", () => {
+    // DaleStudy 봇의 "블로그 07/13 - 07/19" 메시지 — Discord timestamp: 2026-07-13T00:00:57.267Z
+    expect(new Date(snowflakeToMs("1526015542237069445")).toISOString()).toBe(
+      "2026-07-13T00:00:57.267Z",
     );
-
-    expect(await newestThreadUnderParent("guild-1", CH, BOT, "token")).toBe("200");
-  });
-
-  it("봇이 만든 스레드가 없으면 null을 반환한다", async () => {
-    stubFetch([{ id: "300", parent_id: CH, type: 11, owner_id: "user-1" }]);
-
-    expect(await newestThreadUnderParent("guild-1", CH, BOT, "token")).toBe(null);
   });
 });
