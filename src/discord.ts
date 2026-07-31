@@ -1,3 +1,5 @@
+import type { Engagement } from "./blog.js";
+
 /**
  * Discord Ed25519 서명 검증
  */
@@ -182,27 +184,32 @@ export function snowflakeToMs(id: string): number {
   return Number(BigInt(id) >> 22n) + DISCORD_EPOCH_MS;
 }
 
+export interface WeeklyThread {
+  threadId: string;
+  ownerId: string;
+  createdMs: number;
+  title: string;
+}
+
 /**
- * 포럼 채널의 게시글(스레드)을 훑어, [lastMonday9, thisMonday9] 창 안에 만들어진
- * 각 사람의 "첫 게시글 생성 시각(ms)"을 수집한다.
+ * 포럼 채널의 게시글(스레드) 중 [lastMonday9, thisMonday9] 창 안에 만들어진 것을 모은다.
  * 생성 시각은 게시글 ID(snowflake)에서 얻으므로 메시지 내용은 전혀 읽지 않는다.
  * 활성 게시글(길드) + 보관된 게시글(채널)을 모두 본다.
  */
-export async function collectFirstPostTimes(
+export async function collectWeeklyThreads(
   guildId: string,
   forumChannelId: string,
   token: string,
   lastMonday9Ms: number,
   thisMonday9Ms: number,
-): Promise<Map<string, number>> {
+): Promise<WeeklyThread[]> {
   const headers = authHeaders(token);
-  const firstByUser = new Map<string, number>();
+  const threads: WeeklyThread[] = [];
   const consider = (t: any) => {
     if (t.parent_id !== forumChannelId || !t.owner_id) return;
     const ts = snowflakeToMs(t.id);
     if (ts < lastMonday9Ms || ts > thisMonday9Ms) return;
-    const prev = firstByUser.get(t.owner_id);
-    if (prev === undefined || ts < prev) firstByUser.set(t.owner_id, ts);
+    threads.push({ threadId: t.id, ownerId: t.owner_id, createdMs: ts, title: t.name });
   };
 
   // 활성 게시글
@@ -228,7 +235,45 @@ export async function collectFirstPostTimes(
     if (!before) break;
   }
 
-  return firstByUser;
+  return threads;
+}
+
+/**
+ * 게시글의 반응/댓글을 집계한다. 작성자 본인과 봇의 기여는 제외한다.
+ * 포럼 게시글은 스레드 ID가 곧 첫 메시지 ID라서, 스레드 메시지 목록 한 번이면
+ * 첫 글에 달린 반응 종류와 댓글 작성자를 모두 얻는다.
+ */
+export async function getEngagement(
+  thread: WeeklyThread,
+  token: string,
+): Promise<Engagement> {
+  const { threadId, ownerId } = thread;
+  const headers = authHeaders(token);
+
+  const res = await fetch(`${API}/channels/${threadId}/messages?limit=100`, { headers });
+  await ensureOk(res, "게시글 메시지 조회");
+  const messages = (await res.json()) as any[];
+
+  const comments = messages.filter(
+    (m) => m.id !== threadId && !m.author?.bot && m.author?.id !== ownerId,
+  ).length;
+
+  // 이모지 종류가 달라도 같은 사람이면 1명으로 센다.
+  const reactors = new Set<string>();
+  const starter = messages.find((m) => m.id === threadId);
+  for (const r of starter?.reactions ?? []) {
+    const emoji = r.emoji.id ? `${r.emoji.name}:${r.emoji.id}` : r.emoji.name;
+    const usersRes = await fetch(
+      `${API}/channels/${threadId}/messages/${threadId}/reactions/${encodeURIComponent(emoji)}?limit=100`,
+      { headers },
+    );
+    await ensureOk(usersRes, "반응 사용자 조회");
+    for (const u of (await usersRes.json()) as any[]) {
+      if (!u.bot && u.id !== ownerId) reactors.add(u.id);
+    }
+  }
+
+  return { reactors: reactors.size, comments };
 }
 
 /**
@@ -262,12 +307,20 @@ export async function listRoleMembers(
   return ids;
 }
 
-/** 채널에 텍스트 메시지 게시 (멘션 핑 허용) */
-export async function postMessage(channelId: string, content: string, token: string): Promise<void> {
+/**
+ * 채널에 텍스트 메시지 게시.
+ * pingUsers=false 면 멘션이 이름으로 보이기만 하고 알림은 가지 않는다.
+ */
+export async function postMessage(
+  channelId: string,
+  content: string,
+  token: string,
+  pingUsers = true,
+): Promise<void> {
   const res = await fetch(`${API}/channels/${channelId}/messages`, {
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
-    body: JSON.stringify({ content, allowed_mentions: { parse: ["users"] } }),
+    body: JSON.stringify({ content, allowed_mentions: { parse: pingUsers ? ["users"] : [] } }),
   });
   await ensureOk(res, "메시지 전송");
 }

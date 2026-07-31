@@ -1,8 +1,10 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam, getTeamMembership } from "./github.js";
 import { verifySignature, assignRole, getForumPosts, replyToMessage, addReaction } from "./discord.js";
-import { buildWeekLabel, classify, computeWeekWindow } from "./blog.js";
-import { collectFirstPostTimes, listRoleMembers, postMessage } from "./discord.js";
+import type { Engagement } from "./blog.js";
+import { buildRankingReport, buildWeekLabel, classify, computeWeekWindow, firstPostTimes, rankPosts } from "./blog.js";
+import type { WeeklyThread } from "./discord.js";
+import { collectWeeklyThreads, getEngagement, listRoleMembers, postMessage } from "./discord.js";
 
 export default {
   async fetch(
@@ -238,6 +240,39 @@ function buildReport(forumChannelId: string, warn: string[], late: string[]): st
   return parts.join("\n\n");
 }
 
+/** 순위표에 보여줄 글 수 — 상위 3개가 베스트, 나머지는 대체 후보다. */
+const RANKING_SIZE = 5;
+
+/**
+ * 베스트 글 선정용 순위표를 운영진 채널에 게시한다. 최종 선정은 운영진이 보고 판단한다.
+ * blog 역할 대상자의 글만 세므로 운영진이 올리는 안내 글은 자연히 빠진다.
+ */
+async function postRanking(
+  threads: WeeklyThread[],
+  memberIds: string[],
+  channelId: string,
+  token: string,
+  referenceMs: number,
+): Promise<void> {
+  const members = new Set(memberIds);
+  const candidates = threads.filter((t) => members.has(t.ownerId));
+
+  // rate limit을 피해 순차 조회한다.
+  const posts: (WeeklyThread & Engagement)[] = [];
+  for (const thread of candidates) {
+    posts.push({ ...thread, ...(await getEngagement(thread, token)) });
+  }
+
+  const ranked = rankPosts(posts);
+  console.log(
+    `[blog] 순위 집계 candidates=${candidates.length} ` +
+      ranked.slice(0, RANKING_SIZE).map((p) => `${p.title}(${p.score})`).join(" / "),
+  );
+
+  // 아직 확정 전 초안이라 당사자에게 핑을 보내지 않는다.
+  await postMessage(channelId, buildRankingReport(ranked, RANKING_SIZE, referenceMs), token, false);
+}
+
 /**
  * 매주 월요일 09:00(KST) 실행. 블로그글-공유 포럼에 지난 한 주 동안 올라온 게시글을
  * 기준으로 blog 역할 대상자의 블로그 발행/지각을 판정해 리포트를 올리고,
@@ -256,9 +291,10 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
       `window=[${new Date(w.lastMonday9Utc).toISOString()} .. ${new Date(w.thisMonday9Utc).toISOString()}]`,
   );
 
-  const firstTimes = await collectFirstPostTimes(guildId, forumChannelId, token, w.lastMonday9Utc, w.thisMonday9Utc);
+  const threads = await collectWeeklyThreads(guildId, forumChannelId, token, w.lastMonday9Utc, w.thisMonday9Utc);
   const memberIds = await listRoleMembers(guildId, roleId, token);
 
+  const firstTimes = firstPostTimes(threads);
   const warn: string[] = [];
   const late: string[] = [];
   for (const id of memberIds) {
@@ -280,4 +316,6 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
   const label = buildWeekLabel(referenceMs);
   await postMessage(channelId, `${label}\n이번 주 블로그 글은 <#${forumChannelId}> 포럼에 새 게시글로 올려주세요!`, token);
   console.log(`[blog] 주간 안내 게시 완료 "${label}"`);
+
+  await postRanking(threads, memberIds, env.ADMIN_CHANNEL_ID, token, referenceMs);
 }

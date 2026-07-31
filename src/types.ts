@@ -23,4 +23,6 @@ export interface Env {
   BLOG_STUDY_FORUM_ID: string;
   /** 블로그 발행 체크: 대상 'blog' 역할 ID */
   BLOG_STUDY_ROLE_ID: string;
+  /** 베스트 글 순위표를 올릴 운영진 채널 ID */
+  ADMIN_CHANNEL_ID: string;
 }
