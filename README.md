@@ -85,7 +85,6 @@ community-manager/
 | `GITHUB_APP_INSTALLATION_ID` | GitHub App의 조직 Installation ID          |
 | `GITHUB_APP_PRIVATE_KEY`     | GitHub App Private Key (PEM 형식)          |
 | `GH_PAT`                     | GitHub PAT (후원 조회 GraphQL용)           |
-| `STUDY_JOIN_CHANNEL_ID`      | 스터디 신청 포럼 채널 ID (cron 자동 처리)  |
 
 > **봇 자격증명 일원화**: `DISCORD_TOKEN`·`DISCORD_PUBLIC_KEY`·`DISCORD_APPLICATION_ID`는 커뮤니티 공용 봇(`DaleStudy`)의 **조직 레벨** 시크릿이며, CI(GitHub Actions) 배포 시 자동으로 주입됩니다. 저장소별로 개인 봇 자격증명을 따로 관리하지 않습니다.
 
@@ -95,6 +94,7 @@ community-manager/
 | ------------------ | ----------------- |
 | `GITHUB_ORG`       | GitHub 조직 이름                   |
 | `ROLE_TEAM_CONFIG` | 역할-팀 매핑 (JSON, 슬래시 선택지) |
+| `STUDY_JOIN_CHANNEL_ID` | 리트코드 스터디 신청 포럼 채널 ID (cron 자동 처리) |
 | `BLOG_STUDY_CHANNEL_ID` | 블로그 발행 체크: 리포트/주간 안내를 올릴 채널 ID |
 | `BLOG_STUDY_FORUM_ID`   | 블로그 발행 체크: 블로그 글을 게시하는 포럼 채널 ID |
 | `BLOG_STUDY_ROLE_ID`    | 블로그 발행 체크: 대상 `blog` 역할 ID       |
@@ -102,6 +102,8 @@ community-manager/
 ### 로컬 개발 (.dev.vars)
 
 `.dev.vars.example`을 복사해 `.dev.vars`를 만들고 운영진에게 값을 전달받아 채워넣으세요.
+
+파일 아래쪽의 주석 처리된 항목은 **로컬 테스트용 오버라이드**입니다. 채우면 `wrangler.jsonc`의 `vars`보다 우선하므로, 채널·역할 ID를 테스트 서버 값으로 바꿔두면 cron을 직접 트리거해도 운영 채널에 게시되지 않습니다. `DISCORD_GUILD_ID`도 함께 테스트 서버로 바꿔야 역할 조회가 맞물립니다.
 
 ```bash
 cp .dev.vars.example .dev.vars
