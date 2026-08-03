@@ -17,6 +17,7 @@ const mockEnv: Env = {
   BLOG_STUDY_CHANNEL_ID: "test-blog-channel-id",
   BLOG_STUDY_FORUM_ID: "test-blog-forum-id",
   BLOG_STUDY_ROLE_ID: "test-blog-role-id",
+  ADMIN_CHANNEL_ID: "test-admin-channel-id",
 };
 
 function makeSponsorshipResponse(

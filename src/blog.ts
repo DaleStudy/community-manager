@@ -50,11 +50,76 @@ export function classify(firstPostMs: number | undefined, w: WeekWindow): BlogSt
   return "warn";
 }
 
-/** 주간 안내용 라벨 "블로그 MM/DD - MM/DD" (KST 기준, 기준 주 월~일) */
-export function buildWeekLabel(referenceMs: number): string {
+/** 사람별 "첫 게시글 시각"을 뽑는다. */
+export function firstPostTimes(posts: { ownerId: string; createdMs: number }[]): Map<string, number> {
+  const first = new Map<string, number>();
+  for (const p of posts) {
+    const prev = first.get(p.ownerId);
+    if (prev === undefined || p.createdMs < prev) first.set(p.ownerId, p.createdMs);
+  }
+  return first;
+}
+
+/** 댓글 1개에 매기는 점수. 댓글은 반응보다 희소해서 더 무겁게 친다. */
+const COMMENT_WEIGHT = 3;
+
+/** 게시글 작성자 본인과 봇을 제외한 참여 지표 */
+export interface Engagement {
+  /** 고유 반응자 수 (한 사람이 이모지를 여러 개 눌러도 1) */
+  reactors: number;
+  /** 댓글 수 */
+  comments: number;
+}
+
+export interface Post extends Engagement {
+  threadId: string;
+  ownerId: string;
+  createdMs: number;
+}
+
+export type RankedPost = Post & { score: number };
+
+/**
+ * 참여 지표로 점수를 매겨 내림차순 정렬한다.
+ * 동점이면 반응자가 많은 글이, 그래도 같으면 먼저 올라온 글이 앞선다.
+ */
+export function rankPosts<T extends Post>(posts: T[]): (T & { score: number })[] {
+  return posts
+    .map((p) => ({ ...p, score: p.reactors + COMMENT_WEIGHT * p.comments }))
+    .sort((a, b) => b.score - a.score || b.reactors - a.reactors || a.createdMs - b.createdMs);
+}
+
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+/**
+ * 운영진 채널에 올릴 순위표. 상위 3개에 메달을 달고, 그 아래는 대체 후보로 함께 보여준다.
+ * 최종 선정은 운영진이 이 순위표를 보고 판단한다.
+ */
+export function buildRankingReport(ranked: RankedPost[], topN: number, referenceMs: number): string {
+  const week = buildWeekRange(referenceMs - 7 * DAY_MS);
+  const shown = ranked.filter((p) => p.score > 0).slice(0, topN);
+
+  if (shown.length === 0) {
+    return `📊 **블로그 ${week} 순위**\n추천이나 댓글을 받은 글이 없어 순위를 매기지 못했습니다.`;
+  }
+
+  const lines = shown.map((p, i) => {
+    const rank = MEDALS[i] ?? `\`${i + 1}위\``;
+    return `${rank} <#${p.threadId}> — <@${p.ownerId}>\n> 추천 ${p.reactors} · 댓글 ${p.comments} → **${p.score}점**`;
+  });
+
+  return [
+    `📊 **블로그 ${week} 순위** — 이 중에서 베스트 글을 골라주세요`,
+    `-# 추천 1점 · 댓글 ${COMMENT_WEIGHT}점 (작성자 본인의 반응·댓글은 제외)`,
+    ...lines,
+  ].join("\n");
+}
+
+/** 주간 범위 "MM/DD - MM/DD" (KST 기준, 기준 주 월~일) */
+export function buildWeekRange(referenceMs: number): string {
   const start = new Date(referenceMs + KST_OFFSET_MS);
   const end = new Date(start.getTime() + 6 * DAY_MS);
-  return `블로그 ${fmtMonthDay(start)} - ${fmtMonthDay(end)}`;
+  return `${fmtMonthDay(start)} - ${fmtMonthDay(end)}`;
 }
 
 function fmtMonthDay(d: Date): string {

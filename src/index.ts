@@ -1,8 +1,10 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam, getTeamMembership } from "./github.js";
 import { verifySignature, assignRole, getForumPosts, replyToMessage, addReaction } from "./discord.js";
-import { buildWeekLabel, classify, computeWeekWindow } from "./blog.js";
-import { collectFirstPostTimes, listRoleMembers, postMessage } from "./discord.js";
+import type { Engagement } from "./blog.js";
+import { buildRankingReport, buildWeekRange, classify, computeWeekWindow, firstPostTimes, rankPosts } from "./blog.js";
+import type { WeeklyThread } from "./discord.js";
+import { collectWeeklyThreads, getEngagement, listRoleMembers, postMessage } from "./discord.js";
 
 export default {
   async fetch(
@@ -218,10 +220,21 @@ function mentions(ids: string[]): string {
   return ids.map((id) => `<@${id}>`).join(" ");
 }
 
-/** blog-study 원본 check_inactive_users 의 안내 문구를 포럼 게시 기준으로 다듬은 것. */
-function buildReport(forumChannelId: string, warn: string[], late: string[]): string {
+/**
+ * blog-study 원본 check_inactive_users 의 안내 문구를 포럼 게시 기준으로 다듬은 것.
+ * 지난주 판정과 새 주 안내를 한 메시지에 담는다 — 매주 같은 자리에 두 개가 연달아
+ * 올라오면 채널이 그만큼 길어지고, 둘은 어차피 같은 시점의 같은 이야기다.
+ */
+function buildReport(
+  forumChannelId: string,
+  warn: string[],
+  late: string[],
+  weekRange: string,
+): string {
+  const notice = `이번 주(${weekRange}) 블로그 글은 <#${forumChannelId}> 포럼에 새 게시글로 올려주세요!`;
+
   if (warn.length === 0 && late.length === 0) {
-    return `지난주 월요일 09:00부터 이번주 월요일 09:00까지 **${ROLE_LABEL}** 역할 대상자 모두 참여해서, 경고나 지각 대상자가 없습니다!`;
+    return `지난주 월요일 09:00부터 이번주 월요일 09:00까지 **${ROLE_LABEL}** 역할 대상자 모두 참여해서, 경고나 지각 대상자가 없습니다!\n\n${notice}`;
   }
 
   const parts: string[] = [];
@@ -235,7 +248,41 @@ function buildReport(forumChannelId: string, warn: string[], late: string[]): st
       `이번주 월요일 00:00~09:00 사이에, **${ROLE_LABEL}** 역할 대상자 중 <#${forumChannelId}> 포럼에 처음으로 글을 게시해 **지각 1회**를 받은 사람들:\n${mentions(late)}`,
     );
   }
+  parts.push(notice);
   return parts.join("\n\n");
+}
+
+/** 순위표에 보여줄 글 수 — 상위 3개가 베스트, 나머지는 대체 후보다. */
+const RANKING_SIZE = 5;
+
+/**
+ * 베스트 글 선정용 순위표를 운영진 채널에 게시한다. 최종 선정은 운영진이 보고 판단한다.
+ * blog 역할 대상자의 글만 세므로 운영진이 올리는 안내 글은 자연히 빠진다.
+ */
+async function postRanking(
+  threads: WeeklyThread[],
+  memberIds: string[],
+  channelId: string,
+  token: string,
+  referenceMs: number,
+): Promise<void> {
+  const members = new Set(memberIds);
+  const candidates = threads.filter((t) => members.has(t.ownerId));
+
+  // rate limit을 피해 순차 조회한다.
+  const posts: (WeeklyThread & Engagement)[] = [];
+  for (const thread of candidates) {
+    posts.push({ ...thread, ...(await getEngagement(thread, token)) });
+  }
+
+  const ranked = rankPosts(posts);
+  console.log(
+    `[blog] 순위 집계 candidates=${candidates.length} ` +
+      ranked.slice(0, RANKING_SIZE).map((p) => `${p.title}(${p.score})`).join(" / "),
+  );
+
+  // 아직 확정 전 초안이라 당사자에게 핑을 보내지 않는다.
+  await postMessage(channelId, buildRankingReport(ranked, RANKING_SIZE, referenceMs), token, false);
 }
 
 /**
@@ -256,9 +303,10 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
       `window=[${new Date(w.lastMonday9Utc).toISOString()} .. ${new Date(w.thisMonday9Utc).toISOString()}]`,
   );
 
-  const firstTimes = await collectFirstPostTimes(guildId, forumChannelId, token, w.lastMonday9Utc, w.thisMonday9Utc);
+  const threads = await collectWeeklyThreads(guildId, forumChannelId, token, w.lastMonday9Utc, w.thisMonday9Utc);
   const memberIds = await listRoleMembers(guildId, roleId, token);
 
+  const firstTimes = firstPostTimes(threads);
   const warn: string[] = [];
   const late: string[] = [];
   for (const id of memberIds) {
@@ -273,11 +321,9 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
     }
   }
 
-  await postMessage(channelId, buildReport(forumChannelId, warn, late), token);
-  console.log(`[blog] report 게시 완료 warn=${warn.length} late=${late.length}`);
+  const weekRange = buildWeekRange(referenceMs);
+  await postMessage(channelId, buildReport(forumChannelId, warn, late, weekRange), token);
+  console.log(`[blog] report 게시 완료 warn=${warn.length} late=${late.length} week="${weekRange}"`);
 
-  // 새 주 시작 안내
-  const label = buildWeekLabel(referenceMs);
-  await postMessage(channelId, `${label}\n이번 주 블로그 글은 <#${forumChannelId}> 포럼에 새 게시글로 올려주세요!`, token);
-  console.log(`[blog] 주간 안내 게시 완료 "${label}"`);
+  await postRanking(threads, memberIds, env.ADMIN_CHANNEL_ID, token, referenceMs);
 }

@@ -10,7 +10,7 @@ DaleStudy 커뮤니티 운영을 자동화하는 Cloudflare Worker 기반 Discor
 
 1. **`/verify` 슬래시 명령**: 사용자의 GitHub 후원 여부를 확인해, 후원자인 경우 GitHub 조직 팀에 초대하고 Discord 역할(Role)을 부여합니다.
 2. **리트코드 스터디 가입 처리** (cron, 20분 주기): 스터디 신청 포럼에 올라온 글을 폴링해 위 검증 로직을 자동 적용합니다.
-3. **블로그 발행 체크** (cron, 매주 월요일 09:00 KST): `blog` 역할 대상자가 이번 주 블로그를 발행(블로그글-공유 포럼에 게시글 작성)했는지 확인해 리포트를 올리고 새 주 시작 안내를 게시합니다.
+3. **블로그 발행 체크** (cron, 매주 월요일 09:00 KST): `blog` 역할 대상자가 이번 주 블로그를 발행(블로그글-공유 포럼에 게시글 작성)했는지 확인해 리포트와 새 주 시작 안내를 올리고, 베스트 글 선정용 순위표를 운영진 채널에 게시합니다.
 
 ## 아키텍처
 
@@ -39,7 +39,7 @@ GitHub API (Sponsors)                             │
 ```
 Cloudflare Cron ──► Worker.scheduled(event.cron)
    */20 * * * *  ──► handleLeetCodeSignUp      (신청 포럼 폴링 → 후원 검증 재사용)
-   0 0 * * MON   ──► handleBlogPublishCheck     (blog 역할 발행 체크 → 리포트 + 새 스레드)
+   0 0 * * MON   ──► handleBlogPublishCheck     (발행 체크 → 리포트 + 새 스레드 / 순위표 → 운영진 채널)
 ```
 
 ## 기술 스택
@@ -61,7 +61,7 @@ community-manager/
 │   ├── index.ts          # Cloudflare Worker entry point
 │   ├── discord.ts        # Discord 서명 검증, API 호출
 │   ├── github.ts         # GitHub GraphQL/REST API 호출
-│   ├── blog.ts           # 블로그 발행 체크 로직 (KST 주간 경계·발행 상태 분류)
+│   ├── blog.ts           # 블로그 발행 체크 로직 (KST 주간 경계·발행 상태 분류·베스트 글 순위)
 │   └── types.ts          # 공통 타입 정의
 ├── scripts/
 │   └── register.ts       # Discord slash command 등록 스크립트
@@ -98,6 +98,7 @@ community-manager/
 | `BLOG_STUDY_CHANNEL_ID` | 블로그 발행 체크: 리포트/주간 안내를 올릴 채널 ID |
 | `BLOG_STUDY_FORUM_ID`   | 블로그 발행 체크: 블로그 글을 게시하는 포럼 채널 ID |
 | `BLOG_STUDY_ROLE_ID`    | 블로그 발행 체크: 대상 `blog` 역할 ID       |
+| `ADMIN_CHANNEL_ID`      | 베스트 글 순위표를 올릴 운영진 채널 ID      |
 
 ### 로컬 개발 (.dev.vars)
 
@@ -209,9 +210,23 @@ wrangler deploy
 | 지각 | 이번 주 월 00:00 ~ 09:00 첫 게시 | 리포트에 지각 표기 |
 | 경고 | 미게시 | 리포트에 경고 표기 |
 
-- 판정 결과를 리포트 채널(`BLOG_STUDY_CHANNEL_ID`)에 게시하고, 새 주 시작 안내 메시지를 올립니다.
+- 판정 결과와 새 주 시작 안내를 리포트 채널(`BLOG_STUDY_CHANNEL_ID`)에 게시합니다.
 
-> 주간 판정 창(지난 월 09:00 ~ 이번 월 09:00)과 분류 로직은 [`src/blog.ts`](src/blog.ts)에 있고, 경계는 단위 테스트([`src/blog.test.ts`](src/blog.test.ts))로 검증합니다.
+#### 베스트 글 순위표
+
+같은 주간 창의 게시글에 달린 반응과 댓글로 점수를 매겨 상위 5개를 **운영진 채널(`ADMIN_CHANNEL_ID`)** 에 게시합니다. **선정이 아니라 집계**이며, 운영진이 이 중에서 베스트 글을 직접 고릅니다.
+
+| 지표 | 점수 | 집계 방식 |
+|---|---|---|
+| 반응 | 1점 | 고유 반응자 수 — 한 사람이 이모지를 여러 개 눌러도 1명 |
+| 댓글 | 3점 | 댓글 수 — 반응보다 희소해서 더 무겁게 침 |
+
+- **작성자 본인과 봇의 반응·댓글은 제외**합니다. 자문자답으로 점수를 올릴 수 없습니다.
+- `blog` 역할 보유자의 글만 순위 대상입니다. 발행 체크 대상과 같은 기준이라, 운영진이 올리는 안내 글은 자연히 빠집니다.
+- 동점이면 반응자가 많은 글이, 그래도 같으면 먼저 올라온 글이 앞섭니다. 늦게 올린 글이 반응을 모을 시간이 짧은 점은 보정하지 않습니다.
+- 아직 확정 전 초안이므로 멘션은 이름으로 보이기만 하고 **당사자에게 알림이 가지 않습니다**.
+
+> 주간 판정 창(지난 월 09:00 ~ 이번 월 09:00), 분류·점수 로직은 [`src/blog.ts`](src/blog.ts)에 있고, 경계와 순위 규칙은 단위 테스트([`src/blog.test.ts`](src/blog.test.ts))로 검증합니다.
 
 ## 라이선스
 
