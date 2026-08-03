@@ -18,6 +18,11 @@ const mockEnv: Env = {
   BLOG_STUDY_FORUM_ID: "test-blog-forum-id",
   BLOG_STUDY_ROLE_ID: "test-blog-role-id",
   ADMIN_CHANNEL_ID: "test-admin-channel-id",
+  DALEUI_CHANNEL_ID: "test-daleui-channel-id",
+  DALEUI_ROLE_ID: "test-daleui-role-id",
+  DALEUI_PROJECT_NUMBER: "18",
+  DALEUI_MEMBER_MAP: "[]",
+  AI_GATEWAY_TOKEN: "test-gateway-token",
 };
 
 function makeSponsorshipResponse(
