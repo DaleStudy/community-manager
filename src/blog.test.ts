@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRankingReport,
-  buildWeekLabel,
+  buildWeekRange,
   classify,
   computeWeekWindow,
   firstPostTimes,
@@ -43,9 +43,9 @@ describe("classify", () => {
   });
 });
 
-describe("buildWeekLabel", () => {
-  it("블로그 06/29 - 07/05", () => {
-    expect(buildWeekLabel(REF)).toBe("블로그 06/29 - 07/05");
+describe("buildWeekRange", () => {
+  it("06/29 - 07/05", () => {
+    expect(buildWeekRange(REF)).toBe("06/29 - 07/05");
   });
 });
 

@@ -96,11 +96,11 @@ const MEDALS = ["🥇", "🥈", "🥉"];
  * 최종 선정은 운영진이 이 순위표를 보고 판단한다.
  */
 export function buildRankingReport(ranked: RankedPost[], topN: number, referenceMs: number): string {
-  const week = buildWeekLabel(referenceMs - 7 * DAY_MS);
+  const week = buildWeekRange(referenceMs - 7 * DAY_MS);
   const shown = ranked.filter((p) => p.score > 0).slice(0, topN);
 
   if (shown.length === 0) {
-    return `📊 **${week} 순위**\n추천이나 댓글을 받은 글이 없어 순위를 매기지 못했습니다.`;
+    return `📊 **블로그 ${week} 순위**\n추천이나 댓글을 받은 글이 없어 순위를 매기지 못했습니다.`;
   }
 
   const lines = shown.map((p, i) => {
@@ -109,17 +109,17 @@ export function buildRankingReport(ranked: RankedPost[], topN: number, reference
   });
 
   return [
-    `📊 **${week} 순위** — 이 중에서 베스트 글을 골라주세요`,
+    `📊 **블로그 ${week} 순위** — 이 중에서 베스트 글을 골라주세요`,
     `-# 추천 1점 · 댓글 ${COMMENT_WEIGHT}점 (작성자 본인의 반응·댓글은 제외)`,
     ...lines,
   ].join("\n");
 }
 
-/** 주간 안내용 라벨 "블로그 MM/DD - MM/DD" (KST 기준, 기준 주 월~일) */
-export function buildWeekLabel(referenceMs: number): string {
+/** 주간 범위 "MM/DD - MM/DD" (KST 기준, 기준 주 월~일) */
+export function buildWeekRange(referenceMs: number): string {
   const start = new Date(referenceMs + KST_OFFSET_MS);
   const end = new Date(start.getTime() + 6 * DAY_MS);
-  return `블로그 ${fmtMonthDay(start)} - ${fmtMonthDay(end)}`;
+  return `${fmtMonthDay(start)} - ${fmtMonthDay(end)}`;
 }
 
 function fmtMonthDay(d: Date): string {
