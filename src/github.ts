@@ -317,8 +317,12 @@ export async function listRecentComments(
   sinceIso: string,
   token: string,
 ): Promise<CommentItem[]> {
-  const numberFromUrl = (url: string): number =>
-    Number(url.match(/\/(?:issues|pulls)\/(\d+)/)?.[1] ?? 0);
+  // 웹 URL(html_url)은 PR을 /pull/123 단수형으로 쓰므로 번호를 못 읽는다.
+  // 이슈 코멘트는 issue_url, 리뷰 코멘트는 pull_request_url을 항상 들고 온다.
+  const numberFromComment = (c: any): number =>
+    Number(
+      (c.issue_url ?? c.pull_request_url ?? "").match(/\/(?:issues|pulls)\/(\d+)/)?.[1] ?? 0,
+    );
 
   const [issueComments, reviewComments] = await Promise.all([
     ghPaged<any>(
@@ -337,7 +341,7 @@ export async function listRecentComments(
 
   const toItem = (c: any, isReviewComment: boolean): CommentItem => ({
     repo,
-    number: numberFromUrl(c.html_url ?? c.issue_url ?? ""),
+    number: numberFromComment(c),
     author: c.user?.login ?? "unknown",
     body: c.body ?? "",
     url: c.html_url,

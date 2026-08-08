@@ -30,20 +30,8 @@ describe("parseMembers", () => {
 });
 
 describe("computeWindow", () => {
-  it("직전 스레드가 있으면 그 시점부터", () => {
-    const prev = REF - 5 * DAY_MS;
-    expect(computeWindow(REF, prev)).toEqual({ startMs: prev, endMs: REF });
-  });
-
-  it("직전 스레드가 없으면 최근 7일", () => {
-    expect(computeWindow(REF, undefined)).toEqual({
-      startMs: REF - 7 * DAY_MS,
-      endMs: REF,
-    });
-  });
-
-  it("직전 스레드 시각이 미래면 무시하고 7일로 되돌린다", () => {
-    expect(computeWindow(REF, REF + DAY_MS).startMs).toBe(REF - 7 * DAY_MS);
+  it("실행 시각 기준 최근 7일", () => {
+    expect(computeWindow(REF)).toEqual({ startMs: REF - 7 * DAY_MS, endMs: REF });
   });
 });
 
@@ -116,6 +104,17 @@ describe("splitForDiscord", () => {
     for (const chunk of chunks) {
       expect(chunk.length).toBeLessThanOrEqual(500);
     }
+  });
+
+  it("한 줄이 통째로 제한을 넘어도 뒷부분을 버리지 않는다", () => {
+    const longLine = `- ${"가".repeat(1200)}`;
+
+    const chunks = splitForDiscord(`### <@1>\n${longLine}`, 500);
+
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(500);
+    }
+    expect(chunks.join("")).toContain(longLine);
   });
 
   it("기본 제한은 Discord 메시지 상한", () => {

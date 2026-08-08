@@ -6,7 +6,7 @@ import type { Engagement } from "./blog.js";
 import { buildRankingReport, buildWeekRange, classify, computeWeekWindow, firstPostTimes, rankPosts } from "./blog.js";
 import type { WeeklyThread } from "./discord.js";
 import { collectWeeklyThreads, getEngagement, listRoleMembers, postMessage } from "./discord.js";
-import { createThread, findLatestBotThread, listMessages, postMessageWithRoleMention } from "./discord.js";
+import { createThread, listMessages, postMessageWithRoleMention } from "./discord.js";
 import {
   SUMMARY_SYSTEM_PROMPT,
   THREAD_NAME_PREFIX,
@@ -381,20 +381,11 @@ export async function collectDaleuiUpdate(
   const roleMemberIds = await listRoleMembers(env.DISCORD_GUILD_ID, env.DALEUI_ROLE_ID, token);
   const members = reconcileMembers(roleMemberIds, parseMembers(env.DALEUI_MEMBER_MAP));
 
-  const previousThread = await findLatestBotThread(
-    env.DISCORD_GUILD_ID,
-    channelId,
-    token,
-    THREAD_NAME_PREFIX,
-  );
-  const { startMs, endMs } = computeWindow(referenceMs, previousThread?.createdMs);
+  const { startMs, endMs } = computeWindow(referenceMs);
   const sinceIso = new Date(startMs).toISOString();
   const period = formatPeriod(startMs, endMs);
 
-  console.log(
-    `[daleui] 멤버=${members.length} 기간=${period} ` +
-      `직전스레드=${previousThread?.id ?? "없음"} since=${sinceIso}`,
-  );
+  console.log(`[daleui] 멤버=${members.length} 기간=${period} since=${sinceIso}`);
 
   const ghToken = await getInstallationToken(env);
 

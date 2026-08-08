@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { checkSponsorship, getInstallationToken, getTeamCreatedAt, inviteToTeam } from "./github.js";
+import {
+  checkSponsorship,
+  getInstallationToken,
+  getTeamCreatedAt,
+  inviteToTeam,
+  listRecentComments,
+} from "./github.js";
 import type { Env } from "./types.js";
 
 const mockEnv: Env = {
@@ -366,5 +372,48 @@ describe("getInstallationToken", () => {
     await expect(getInstallationToken(mockEnv)).rejects.toThrow(
       "Failed to get installation token",
     );
+  });
+});
+
+describe("listRecentComments", () => {
+  // GitHub 웹 URL은 PR을 /pull/ 단수형으로 쓴다. API URL(/issues/, /pulls/)에서 번호를 읽어야 한다.
+  const issueCommentOnPr = {
+    issue_url: "https://api.github.com/repos/DaleStudy/daleui/issues/123",
+    html_url: "https://github.com/DaleStudy/daleui/pull/123#issuecomment-1",
+    user: { login: "alice" },
+    body: "확인했습니다",
+    created_at: "2026-08-01T00:00:00Z",
+  };
+  const reviewComment = {
+    pull_request_url: "https://api.github.com/repos/DaleStudy/daleui/pulls/456",
+    html_url: "https://github.com/DaleStudy/daleui/pull/456#discussion_r1",
+    user: { login: "bob" },
+    body: "여기 네이밍을 바꾸면 좋겠어요",
+    created_at: "2026-08-02T00:00:00Z",
+  };
+
+  it("PR 리뷰 코멘트도 실제 PR 번호로 연결한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: URL) =>
+        Promise.resolve({
+          ok: true,
+          json: async () =>
+            String(url).includes("/pulls/comments") ? [reviewComment] : [issueCommentOnPr],
+        }),
+      ),
+    );
+
+    const comments = await listRecentComments(
+      "DaleStudy",
+      "daleui",
+      "2026-07-25T00:00:00Z",
+      "test-token",
+    );
+
+    expect(comments).toEqual([
+      expect.objectContaining({ number: 123, author: "alice", isReviewComment: false }),
+      expect.objectContaining({ number: 456, author: "bob", isReviewComment: true }),
+    ]);
   });
 });

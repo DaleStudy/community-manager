@@ -403,26 +403,3 @@ export async function listMessages(
   }));
 }
 
-/**
- * 봇이 이 채널에 가장 최근에 만든 스레드. 직전 업데이트 스레드를 찾아
- * 취합 기간의 시작점으로 쓴다. 못 찾으면 null.
- */
-export async function findLatestBotThread(
-  guildId: string,
-  channelId: string,
-  token: string,
-  namePrefix: string,
-): Promise<{ id: string; name: string; createdMs: number } | null> {
-  const res = await fetch(`${API}/guilds/${guildId}/threads/active`, {
-    headers: authHeaders(token),
-  });
-  await ensureOk(res, "활성 스레드 조회");
-
-  const threads: any[] = ((await res.json()) as any).threads ?? [];
-  const mine = threads
-    .filter((t) => t.parent_id === channelId && t.name?.startsWith(namePrefix))
-    .map((t) => ({ id: t.id, name: t.name, createdMs: snowflakeToMs(t.id) }))
-    .sort((a, b) => b.createdMs - a.createdMs);
-
-  return mine[0] ?? null;
-}

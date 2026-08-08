@@ -8,7 +8,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Discord 메시지 하나에 들어갈 수 있는 최대 글자 수 */
 export const DISCORD_MESSAGE_LIMIT = 2000;
 
-/** 봇이 만드는 업데이트 스레드 이름의 접두사 — 직전 스레드를 되찾을 때 쓴다. */
+/** 봇이 만드는 업데이트 스레드 이름의 접두사 — 채널 목록에서 눈에 띄게 한다. */
 export const THREAD_NAME_PREFIX = "🧵";
 
 export interface Member {
@@ -26,18 +26,11 @@ export function parseMembers(json: string): Member[] {
 }
 
 /**
- * 취합 기간을 정한다. 직전 업데이트 스레드가 있으면 그 시점부터, 없으면 최근 7일.
- * 스레드가 생긴 뒤의 활동만 봐야 같은 내용을 두 번 올리지 않는다.
+ * 취합 기간은 항상 최근 7일 — cron 주기와 같다.
+ * 실행이 한 번 걸러도 구간이 늘어나지 않으므로 모델 입력 크기가 매주 일정하다.
  */
-export function computeWindow(
-  nowMs: number,
-  previousThreadMs: number | undefined,
-): { startMs: number; endMs: number } {
-  const startMs =
-    previousThreadMs !== undefined && previousThreadMs < nowMs
-      ? previousThreadMs
-      : nowMs - 7 * DAY_MS;
-  return { startMs, endMs: nowMs };
+export function computeWindow(nowMs: number): { startMs: number; endMs: number } {
+  return { startMs: nowMs - 7 * DAY_MS, endMs: nowMs };
 }
 
 /** "M/D~M/D" (KST 기준) */
@@ -244,17 +237,28 @@ function splitByLine(block: string, limit: number): string[] {
   let buffer = "";
 
   for (const line of block.split("\n")) {
-    const piece = line.length > limit ? line.slice(0, limit) : line;
-    if (buffer.length + piece.length + 1 > limit) {
-      if (buffer.trim()) out.push(buffer.trim());
-      buffer = piece;
-    } else {
-      buffer = buffer ? `${buffer}\n${piece}` : piece;
+    for (const piece of chunkLine(line, limit)) {
+      if (buffer.length + piece.length + 1 > limit) {
+        if (buffer.trim()) out.push(buffer.trim());
+        buffer = piece;
+      } else {
+        buffer = buffer ? `${buffer}\n${piece}` : piece;
+      }
     }
   }
   if (buffer.trim()) out.push(buffer.trim());
 
   return out;
+}
+
+/** 제한보다 긴 한 줄은 버리지 않고 제한 크기로 마저 나눈다. */
+function chunkLine(line: string, limit: number): string[] {
+  if (line.length <= limit) return [line];
+
+  const pieces: string[] = [];
+  for (let i = 0; i < line.length; i += limit) pieces.push(line.slice(i, i + limit));
+
+  return pieces;
 }
 
 /** 채널에 올릴 스레드 시작 메시지 — 역할 멘션은 여기 한 번만 등장한다. */
