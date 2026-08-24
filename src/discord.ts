@@ -308,7 +308,7 @@ export async function listRoleMembers(
 }
 
 /**
- * 채널에 텍스트 메시지 게시.
+ * 채널에 텍스트 메시지 게시하고 그 메시지 ID를 돌려준다.
  * pingUsers=false 면 멘션이 이름으로 보이기만 하고 알림은 가지 않는다.
  */
 export async function postMessage(
@@ -316,11 +316,90 @@ export async function postMessage(
   content: string,
   token: string,
   pingUsers = true,
-): Promise<void> {
+): Promise<string> {
   const res = await fetch(`${API}/channels/${channelId}/messages`, {
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({ content, allowed_mentions: { parse: pingUsers ? ["users"] : [] } }),
   });
   await ensureOk(res, "메시지 전송");
+  return ((await res.json()) as any).id;
 }
+
+// ── 달레UI 주간 업데이트 헬퍼 ──────────────────────────────────────
+
+/** 역할 멘션까지 알림이 가도록 허용할 멘션 종류 */
+const MENTION_ALL = { parse: ["users", "roles"] };
+
+/**
+ * 채널 메시지에서 스레드를 시작한다. 생성된 스레드 ID는 시작 메시지 ID와 같다.
+ * autoArchiveDuration 단위는 분(1440=1일, 4320=3일, 10080=7일).
+ */
+export async function createThread(
+  channelId: string,
+  messageId: string,
+  name: string,
+  token: string,
+  autoArchiveDuration = 4320,
+): Promise<string> {
+  const res = await fetch(
+    `${API}/channels/${channelId}/messages/${messageId}/threads`,
+    {
+      method: "POST",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify({ name, auto_archive_duration: autoArchiveDuration }),
+    },
+  );
+  await ensureOk(res, "스레드 생성");
+  return ((await res.json()) as any).id;
+}
+
+/**
+ * 역할 멘션이 포함된 메시지 게시. 스레드 시작 메시지처럼
+ * 역할 전체에 알림을 보내야 하는 경우에만 쓴다.
+ */
+export async function postMessageWithRoleMention(
+  channelId: string,
+  content: string,
+  token: string,
+): Promise<string> {
+  const res = await fetch(`${API}/channels/${channelId}/messages`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ content, allowed_mentions: MENTION_ALL }),
+  });
+  await ensureOk(res, "역할 멘션 메시지 전송");
+  return ((await res.json()) as any).id;
+}
+
+export interface ChannelMessage {
+  id: string;
+  authorId: string;
+  authorName: string;
+  isBot: boolean;
+  content: string;
+  createdMs: number;
+}
+
+/** 채널 또는 스레드의 최근 메시지 (최신순으로 최대 limit개). */
+export async function listMessages(
+  channelId: string,
+  token: string,
+  limit = 50,
+): Promise<ChannelMessage[]> {
+  const url = new URL(`${API}/channels/${channelId}/messages`);
+  url.searchParams.set("limit", String(Math.min(limit, 100)));
+
+  const res = await fetch(url, { headers: authHeaders(token) });
+  await ensureOk(res, "채널 메시지 조회");
+
+  return ((await res.json()) as any[]).map((m) => ({
+    id: m.id,
+    authorId: m.author?.id ?? "",
+    authorName: m.author?.username ?? "unknown",
+    isBot: Boolean(m.author?.bot),
+    content: m.content ?? "",
+    createdMs: snowflakeToMs(m.id),
+  }));
+}
+

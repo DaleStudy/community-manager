@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
-    "register": "tsx scripts/register-commands.ts"
+    "register": "tsx scripts/register-commands.ts",
+    "preview:daleui": "tsx --env-file=.dev.vars scripts/preview-daleui.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250407.0",

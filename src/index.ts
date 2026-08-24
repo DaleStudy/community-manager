@@ -1,10 +1,26 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam, getTeamMembership } from "./github.js";
+import { getLatestMeetingIssue, getProjectItems, listRecentComments, listRecentIssuesAndPulls } from "./github.js";
 import { verifySignature, assignRole, getForumPosts, replyToMessage, addReaction } from "./discord.js";
 import type { Engagement } from "./blog.js";
 import { buildRankingReport, buildWeekRange, classify, computeWeekWindow, firstPostTimes, rankPosts } from "./blog.js";
 import type { WeeklyThread } from "./discord.js";
 import { collectWeeklyThreads, getEngagement, listRoleMembers, postMessage } from "./discord.js";
+import { createThread, listMessages, postMessageWithRoleMention } from "./discord.js";
+import {
+  SUMMARY_SYSTEM_PROMPT,
+  THREAD_NAME_PREFIX,
+  buildContext,
+  buildThreadName,
+  buildThreadStarter,
+  buildUserPrompt,
+  computeWindow,
+  formatPeriod,
+  parseMembers,
+  reconcileMembers,
+  splitForDiscord,
+} from "./daleui.js";
+import { generateSummary } from "./claude.js";
 
 export default {
   async fetch(
@@ -46,10 +62,15 @@ export default {
   },
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    // cron 패턴으로 분기: 블로그 발행 체크(월 09:00 KST = 월 00:00 UTC) vs 20분 주기 가입 처리
+    // cron 패턴으로 분기
     if (event.cron === "0 0 * * MON") {
+      // 블로그 발행 체크 (월 09:00 KST)
       ctx.waitUntil(handleBlogPublishCheck(env, event.scheduledTime));
+    } else if (event.cron === "0 23 * * FRI") {
+      // 달레UI 주간 업데이트 (토 08:00 KST — 09:30 회의 1시간 30분 전)
+      ctx.waitUntil(handleDaleuiWeeklyUpdate(env, event.scheduledTime));
     } else {
+      // 20분 주기 가입 처리
       ctx.waitUntil(handleLeetCodeSignUp(env));
     }
   },
@@ -326,4 +347,118 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
   console.log(`[blog] report 게시 완료 warn=${warn.length} late=${late.length} week="${weekRange}"`);
 
   await postRanking(threads, memberIds, env.ADMIN_CHANNEL_ID, token, referenceMs);
+}
+
+// ── 달레UI 주간 업데이트 처리 ──────────────────────────────────────
+
+/** 활동을 수집할 저장소 */
+const DALEUI_REPOS = ["daleui", "daleui.com"];
+
+/** 채널 대화에서 읽어올 최근 메시지 수 — 회의 시간 변경 같은 결정이 여기 남는다. */
+const DALEUI_CHANNEL_MESSAGES = 30;
+
+export interface DaleuiCollection {
+  meetingTitle: string;
+  period: string;
+  memberCount: number;
+  /** 모델에게 넘길 활동 흔적 원문 */
+  context: string;
+}
+
+/**
+ * 게시에 필요한 재료를 모은다. 부수효과가 없는 읽기 전용 단계라
+ * 로컬 미리보기(`npm run preview:daleui`)에서도 그대로 재사용한다.
+ */
+export async function collectDaleuiUpdate(
+  env: Env,
+  referenceMs: number,
+): Promise<DaleuiCollection> {
+  const token = env.DISCORD_TOKEN;
+  const org = env.GITHUB_ORG;
+  const channelId = env.DALEUI_CHANNEL_ID;
+
+  // 역할 멤버를 매번 다시 조회해 탈퇴·합류 변동을 반영한다.
+  const roleMemberIds = await listRoleMembers(env.DISCORD_GUILD_ID, env.DALEUI_ROLE_ID, token);
+  const members = reconcileMembers(roleMemberIds, parseMembers(env.DALEUI_MEMBER_MAP));
+
+  const { startMs, endMs } = computeWindow(referenceMs);
+  const sinceIso = new Date(startMs).toISOString();
+  const period = formatPeriod(startMs, endMs);
+
+  console.log(`[daleui] 멤버=${members.length} 기간=${period} since=${sinceIso}`);
+
+  const ghToken = await getInstallationToken(env);
+
+  const [activity, comments, board, meeting, channelMessages] = await Promise.all([
+    Promise.all(
+      DALEUI_REPOS.map((repo) => listRecentIssuesAndPulls(org, repo, sinceIso, ghToken)),
+    ).then((r) => r.flat()),
+    Promise.all(
+      DALEUI_REPOS.map((repo) => listRecentComments(org, repo, sinceIso, ghToken)),
+    ).then((r) => r.flat()),
+    getProjectItems(org, Number(env.DALEUI_PROJECT_NUMBER), ghToken),
+    getLatestMeetingIssue(org, DALEUI_REPOS[0], ghToken),
+    listMessages(channelId, token, DALEUI_CHANNEL_MESSAGES),
+  ]);
+
+  const meetingTitle = meeting?.title ?? "주간 회의";
+
+  console.log(
+    `[daleui] 수집 완료 활동=${activity.length} 코멘트=${comments.length} ` +
+      `보드=${board.length} 대화=${channelMessages.length} 회의="${meetingTitle}"`,
+  );
+
+  return {
+    meetingTitle,
+    period,
+    memberCount: members.length,
+    context: buildContext({
+      members,
+      meetingTitle,
+      period,
+      activity,
+      comments,
+      board,
+      discordMessages: channelMessages,
+    }),
+  };
+}
+
+/**
+ * 매주 토요일 08:00(KST) 실행. 회의(09:30) 전에 GitHub·Discord 활동을 취합해
+ * 디자인시스템 채널에 개인 업데이트 스레드를 만들고 멤버별 요약을 게시한다.
+ *
+ * 수집은 이 함수가, 무엇이 완료·리스크인지에 대한 판단은 모델이 맡는다.
+ */
+async function handleDaleuiWeeklyUpdate(env: Env, referenceMs: number): Promise<void> {
+  const token = env.DISCORD_TOKEN;
+  const channelId = env.DALEUI_CHANNEL_ID;
+
+  const { meetingTitle, context } = await collectDaleuiUpdate(env, referenceMs);
+
+  const summary = await generateSummary(
+    SUMMARY_SYSTEM_PROMPT,
+    buildUserPrompt(context),
+    env.AI_GATEWAY_TOKEN,
+  );
+
+  // 역할 멘션은 채널의 시작 메시지에 한 번만. 스레드 안에서는 개인 멘션만 쓴다.
+  const starterId = await postMessageWithRoleMention(
+    channelId,
+    buildThreadStarter(meetingTitle, env.DALEUI_ROLE_ID),
+    token,
+  );
+  const threadId = await createThread(
+    channelId,
+    starterId,
+    buildThreadName(meetingTitle),
+    token,
+  );
+
+  const chunks = splitForDiscord(summary);
+  for (const chunk of chunks) {
+    await postMessage(threadId, chunk, token);
+  }
+
+  console.log(`[daleui] 게시 완료 threadId=${threadId} 메시지=${chunks.length}개`);
 }

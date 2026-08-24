@@ -11,6 +11,7 @@ DaleStudy 커뮤니티 운영을 자동화하는 Cloudflare Worker 기반 Discor
 1. **`/verify` 슬래시 명령**: 사용자의 GitHub 후원 여부를 확인해, 후원자인 경우 GitHub 조직 팀에 초대하고 Discord 역할(Role)을 부여합니다.
 2. **리트코드 스터디 가입 처리** (cron, 20분 주기): 스터디 신청 포럼에 올라온 글을 폴링해 위 검증 로직을 자동 적용합니다.
 3. **블로그 발행 체크** (cron, 매주 월요일 09:00 KST): `blog` 역할 대상자가 이번 주 블로그를 발행(블로그글-공유 포럼에 게시글 작성)했는지 확인해 리포트와 새 주 시작 안내를 올리고, 베스트 글 선정용 순위표를 운영진 채널에 게시합니다.
+4. **달레UI 주간 업데이트** (cron, 매주 토요일 08:00 KST): 디자인시스템 팀의 주간 회의(09:30) 전에 GitHub(이슈·PR·코멘트·프로젝트 보드)과 Discord 활동을 취합해 개인 업데이트 스레드를 만들고 멤버별 요약을 게시합니다. 요약 작성은 Claude API가 맡습니다.
 
 ## 아키텍처
 
@@ -34,12 +35,32 @@ GitHub API (Sponsors)                             │
     └─ 후원 O ──► Discord REST API (역할 부여) ───┘
 ```
 
-위 그림은 `/verify` 인터랙션(`fetch` 핸들러) 흐름입니다. 이와 별개로, 봇은 **Cron Trigger로 두 가지 작업**을 `scheduled` 핸들러에서 주기적으로 실행하며 `event.cron` 값으로 분기합니다.
+위 그림은 `/verify` 인터랙션(`fetch` 핸들러) 흐름입니다. 이와 별개로, 봇은 **Cron Trigger로 세 가지 작업**을 `scheduled` 핸들러에서 주기적으로 실행하며 `event.cron` 값으로 분기합니다.
 
 ```
 Cloudflare Cron ──► Worker.scheduled(event.cron)
-   */20 * * * *  ──► handleLeetCodeSignUp      (신청 포럼 폴링 → 후원 검증 재사용)
+   */20 * * * *  ──► handleLeetCodeSignUp       (신청 포럼 폴링 → 후원 검증 재사용)
    0 0 * * MON   ──► handleBlogPublishCheck     (발행 체크 → 리포트 + 새 스레드 / 순위표 → 운영진 채널)
+   0 23 * * FRI  ──► handleDaleuiWeeklyUpdate   (활동 수집 → Claude 요약 → 스레드 생성 + 게시)
+```
+
+달레UI 주간 업데이트는 **수집과 판단을 분리**합니다. 무엇이 있었는지(이슈·PR·코멘트·보드 상태·채널 대화)는 코드가 모으고, 무엇이 완료·주의·위험인지와 멤버별 기여 순서는 Claude가 정합니다.
+
+```
+handleDaleuiWeeklyUpdate
+   │
+   ├─ 역할 멤버 조회 → 매핑 대조 (신규 합류자도 누락하지 않음)
+   ├─ 직전 업데이트 스레드 → 취합 기간 결정 (없으면 최근 7일)
+   │
+   ├─ 병렬 수집 ─┬─ GitHub 이슈·PR      (daleui, daleui.com)
+   │             ├─ GitHub 코멘트·리뷰
+   │             ├─ 프로젝트 보드        (projectV2 GraphQL)
+   │             ├─ 최신 Sprint 회의 이슈 (스레드 제목)
+   │             └─ Discord 채널 대화
+   │
+   ├─ Claude API (claude-opus-5) → 멤버별 요약
+   │
+   └─ 시작 메시지(역할 멘션 1회) → 스레드 생성 → 2000자 단위 분할 게시
 ```
 
 ## 기술 스택
@@ -51,6 +72,8 @@ Cloudflare Cron ──► Worker.scheduled(event.cron)
 | 후원 확인     | GitHub GraphQL API (`sponsorshipsAsMaintainer`)                         |
 | 팀 초대       | GitHub REST API (`PUT /orgs/{org}/teams/{team}/memberships/{username}`) |
 | 역할 부여     | Discord REST API (`PUT /guilds/{guild}/members/{user}/roles/{role}`)    |
+| 주간 요약     | Claude API (`claude-opus-5`, `@anthropic-ai/sdk`) via Cloudflare AI Gateway |
+| 프로젝트 보드 | GitHub GraphQL API (`projectV2`)                                        |
 | 배포          | Wrangler CLI                                                            |
 
 ## 프로젝트 구조
@@ -62,9 +85,12 @@ community-manager/
 │   ├── discord.ts        # Discord 서명 검증, API 호출
 │   ├── github.ts         # GitHub GraphQL/REST API 호출
 │   ├── blog.ts           # 블로그 발행 체크 로직 (KST 주간 경계·발행 상태 분류·베스트 글 순위)
+│   ├── daleui.ts         # 달레UI 주간 업데이트 로직 (취합 기간·컨텍스트 구성·요약 프롬프트·메시지 분할)
+│   ├── claude.ts         # Claude API 호출 (멤버별 요약 생성)
 │   └── types.ts          # 공통 타입 정의
 ├── scripts/
-│   └── register.ts       # Discord slash command 등록 스크립트
+│   ├── register-commands.ts # Discord slash command 등록 (npm run register)
+│   └── preview-daleui.ts    # 달레UI 주간 업데이트 로컬 미리보기 (게시하지 않음)
 ├── wrangler.jsonc        # Cloudflare Worker 설정
 ├── tsconfig.json         # TypeScript 설정
 ├── package.json          # Node.js 패키지 설정
@@ -85,6 +111,7 @@ community-manager/
 | `GITHUB_APP_INSTALLATION_ID` | GitHub App의 조직 Installation ID          |
 | `GITHUB_APP_PRIVATE_KEY`     | GitHub App Private Key (PEM 형식)          |
 | `GH_PAT`                     | GitHub PAT (후원 조회 GraphQL용)           |
+| `AI_GATEWAY_TOKEN`           | AI Gateway 통과용 토큰 (달레UI 주간 요약)  |
 
 > **봇 자격증명 일원화**: `DISCORD_TOKEN`·`DISCORD_PUBLIC_KEY`·`DISCORD_APPLICATION_ID`는 커뮤니티 공용 봇(`DaleStudy`)의 **조직 레벨** 시크릿이며, CI(GitHub Actions) 배포 시 자동으로 주입됩니다. 저장소별로 개인 봇 자격증명을 따로 관리하지 않습니다.
 
@@ -99,6 +126,10 @@ community-manager/
 | `BLOG_STUDY_FORUM_ID`   | 블로그 발행 체크: 블로그 글을 게시하는 포럼 채널 ID |
 | `BLOG_STUDY_ROLE_ID`    | 블로그 발행 체크: 대상 `blog` 역할 ID       |
 | `ADMIN_CHANNEL_ID`      | 베스트 글 순위표를 올릴 운영진 채널 ID      |
+| `DALEUI_CHANNEL_ID`     | 달레UI 주간 업데이트: 스레드를 만들 디자인시스템 채널 ID |
+| `DALEUI_ROLE_ID`        | 달레UI 주간 업데이트: 대상 `designsystem` 역할 ID |
+| `DALEUI_PROJECT_NUMBER` | 달레UI 주간 업데이트: 프로젝트 보드(projectV2) 번호 |
+| `DALEUI_MEMBER_MAP`     | 달레UI 주간 업데이트: Discord ID ↔ GitHub 핸들 매핑 (JSON) |
 
 ### 로컬 개발 (.dev.vars)
 
@@ -227,6 +258,66 @@ wrangler deploy
 - 아직 확정 전 초안이므로 멘션은 이름으로 보이기만 하고 **당사자에게 알림이 가지 않습니다**.
 
 > 주간 판정 창(지난 월 09:00 ~ 이번 월 09:00), 분류·점수 로직은 [`src/blog.ts`](src/blog.ts)에 있고, 경계와 순위 규칙은 단위 테스트([`src/blog.test.ts`](src/blog.test.ts))로 검증합니다.
+
+### 달레UI 주간 업데이트 (주간 cron)
+
+매주 토요일 08:00 KST(`0 23 * * FRI`)에 실행되어, 디자인시스템 팀의 주간 회의(09:30) 전에 개인 업데이트 스레드를 만듭니다. 멤버들은 빈 칸을 채우는 대신 **누락되거나 틀린 부분만 정정**하면 됩니다.
+
+#### 취합 기간
+
+직전 업데이트 스레드가 만들어진 시점부터 지금까지입니다. 스레드를 못 찾으면 최근 7일로 되돌아갑니다. 같은 활동을 두 주 연속 올리지 않기 위한 기준입니다.
+
+#### 수집하는 것
+
+| 소스 | 조회 | 왜 보는가 |
+|---|---|---|
+| GitHub 이슈·PR | `/repos/{org}/{repo}/issues?since=` | 한 번의 조회로 이슈와 PR을 함께 얻고 `pull_request` 필드로 구분합니다 |
+| GitHub 코멘트·리뷰 | `/issues/comments`, `/pulls/comments` | 자가 보고에 안 잡히는 설계 제안·기술 피드백이 여기서 나옵니다 |
+| 프로젝트 보드 | `projectV2` GraphQL | 활동 흔적만으로는 안 보이는 미착수·정체 항목이 드러납니다 |
+| Discord 채널 | 최근 30개 메시지 | 회의 시간 변경 같은 채널 내 결정을 잡습니다 |
+
+`daleui`와 `daleui.com` 두 저장소를 봅니다. 역할 멤버는 매번 다시 조회해 탈퇴·합류 변동을 반영하며, 매핑 표에 없는 신규 멤버도 GitHub 핸들 없이 포함해 통째로 누락되지 않게 합니다.
+
+#### 요약 생성
+
+수집한 원자료를 Claude(`claude-opus-5`)에 넘겨 멤버별 요약을 받습니다. **무엇이 완료·주의·위험인지, 누가 이번 주에 더 기여했는지는 규칙으로 환원되지 않아** 모델이 판단합니다. 코드는 수집과 게시만 맡습니다.
+
+호출은 [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/)를 거칩니다. Messages API에 `fetch`로 POST 한 번이 전부라 SDK는 쓰지 않습니다.
+
+```
+https://gateway.ai.cloudflare.com/v1/{계정 ID}/dalestudy/anthropic/v1/messages
+```
+
+- 상태 아이콘은 ✅ 완료 · ▶️ 진행 · ⚠️ 주의 · 🚨 위험 네 가지만 씁니다.
+- 활동이 안 잡히는 멤버는 지어내지 않고 "이번 주 확인된 기여 없음"으로 명시합니다.
+- 요약이 잘렸거나(`max_tokens`) 비었으면 게시하지 않고 실패합니다.
+
+#### 게시
+
+역할 멘션은 **채널의 스레드 시작 메시지에 한 번만** 등장하고, 스레드 안에서는 개인 멘션만 씁니다. 멘션 위치가 알림 범위를 결정하기 때문입니다. 요약이 Discord 메시지 상한(2000자)을 넘으면 멤버 구분자인 H3 헤더 경계에서 나눠 한 사람의 요약이 두 메시지에 걸치지 않게 합니다.
+
+> 취합 기간 계산, 컨텍스트 구성, 요약 프롬프트, 메시지 분할은 [`src/daleui.ts`](src/daleui.ts)에 순수 함수로 있고 단위 테스트([`src/daleui.test.ts`](src/daleui.test.ts))로 검증합니다. Claude 호출은 [`src/claude.ts`](src/claude.ts)에 격리되어 있어 요약 품질과 무관하게 수집 로직을 검증할 수 있습니다.
+
+#### 로컬에서 미리 보기
+
+게시 직전까지만 실행해 요약을 콘솔에 출력합니다. **Discord에는 아무것도 올라가지 않습니다.**
+
+```bash
+npm run preview:daleui             # 수집 + 요약 생성
+npm run preview:daleui -- --collect # 수집만 (Claude 호출 없음 = 비용 0)
+npm run preview:daleui -- --context # 모델에 넘어가는 원문까지 출력
+```
+
+`.dev.vars`에 `GITHUB_APP_ID`·`GITHUB_APP_INSTALLATION_ID`·`GITHUB_APP_PRIVATE_KEY`가 필요하고, 요약까지 보려면 `AI_GATEWAY_TOKEN`도 필요합니다. 채널·역할 ID 같은 공개값은 `wrangler.jsonc`에서 읽되 `.dev.vars`가 있으면 그쪽이 우선하므로, 테스트 서버 값으로 덮어써서 돌려볼 수 있습니다.
+
+게시까지 포함한 전체 흐름을 확인하려면 `.dev.vars`에서 `DISCORD_GUILD_ID`·`DALEUI_CHANNEL_ID`·`DALEUI_ROLE_ID`를 테스트 서버 값으로 바꾼 뒤 실행합니다.
+
+```bash
+npx wrangler dev --test-scheduled
+curl "http://localhost:8787/__scheduled?cron=0+23+*+*+FRI"
+```
+
+> ⚠️ 오버라이드 없이 `wrangler dev`로 cron을 트리거하면 **운영 채널에 실제로 게시되고 역할 멘션이 발송됩니다.** 로컬이라고 해서 Discord 호출이 막히지는 않습니다.
 
 ## 라이선스
 

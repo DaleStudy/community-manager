@@ -48,6 +48,7 @@ jobs:
             GITHUB_APP_INSTALLATION_ID
             GITHUB_APP_PRIVATE_KEY
             GH_PAT
+            AI_GATEWAY_TOKEN
         env:
           DISCORD_PUBLIC_KEY: ${{ secrets.DISCORD_PUBLIC_KEY }}
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
@@ -58,3 +59,4 @@ jobs:
           GITHUB_APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
           GITHUB_APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           GH_PAT: ${{ secrets.GH_PAT }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
