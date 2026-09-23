@@ -324,8 +324,14 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
       `window=[${new Date(w.lastMonday9Utc).toISOString()} .. ${new Date(w.thisMonday9Utc).toISOString()}]`,
   );
 
-  const threads = await collectWeeklyThreads(guildId, forumChannelId, token, w.lastMonday9Utc, w.thisMonday9Utc);
+  // 기수 사이에는 blog 역할이 비어 있다. 판정할 대상이 없으면 포럼도 읽지 않고 넘어간다.
   const memberIds = await listRoleMembers(guildId, roleId, token);
+  if (memberIds.length === 0) {
+    console.log("[blog] blog 역할 대상자가 없어 건너뜁니다");
+    return;
+  }
+
+  const threads = await collectWeeklyThreads(guildId, forumChannelId, token, w.lastMonday9Utc, w.thisMonday9Utc);
 
   const firstTimes = firstPostTimes(threads);
   const warn: string[] = [];
