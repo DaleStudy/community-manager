@@ -12,11 +12,11 @@
     "preview:daleui": "tsx --env-file=.dev.vars scripts/preview-daleui.ts"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250407.0",
+    "@cloudflare/workers-types": "^5.20261012.1",
     "@types/node": "^25.6.0",
     "tsx": "^4.21.0",
     "typescript": "^5.0.0",
     "vitest": "^3.2.4",
-    "wrangler": "^3.0.0"
+    "wrangler": "^4.149.0"
   }
 }

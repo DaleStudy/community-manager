@@ -6,13 +6,8 @@ DISCORD_TOKEN=
 DISCORD_PUBLIC_KEY=
 DISCORD_APPLICATION_ID=
 
-# 대상 서버 ID. 로컬에서는 테스트 서버 ID 를 넣어 운영 서버를 건드리지 않는다.
-DISCORD_GUILD_ID=
-
 # ── GitHub ───────────────────────────────────────────────────
 # App: 이슈·PR·코멘트 조회, 프로젝트 보드 조회, 팀 초대
-GITHUB_APP_ID=
-GITHUB_APP_INSTALLATION_ID=
 # PEM 은 여러 줄이므로 큰따옴표로 감싸야 함
 GITHUB_APP_PRIVATE_KEY=
 
@@ -25,6 +20,7 @@ AI_GATEWAY_TOKEN=
 # ── 로컬 테스트용 오버라이드 (선택) ───────────────────────────
 # 채우면 wrangler.jsonc 의 vars 보다 우선한다. 테스트 서버의 채널·역할 ID 로
 # 바꿔두면 cron 을 직접 트리거해도 운영 채널에 게시되지 않는다.
+# DISCORD_GUILD_ID=
 # STUDY_JOIN_CHANNEL_ID=
 # BLOG_STUDY_CHANNEL_ID=
 # BLOG_STUDY_FORUM_ID=

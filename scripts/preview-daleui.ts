@@ -31,13 +31,7 @@ function readWranglerVars(): Record<string, string> {
 }
 
 /** 수집에 필요한 시크릿 — .dev.vars 에서 온다. */
-const COLLECT_SECRETS = [
-  "DISCORD_TOKEN",
-  "DISCORD_GUILD_ID",
-  "GITHUB_APP_ID",
-  "GITHUB_APP_INSTALLATION_ID",
-  "GITHUB_APP_PRIVATE_KEY",
-];
+const COLLECT_SECRETS = ["DISCORD_TOKEN", "GITHUB_APP_PRIVATE_KEY"];
 
 const collectOnly = process.argv.includes("--collect");
 const showContext = process.argv.includes("--context");

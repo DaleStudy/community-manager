@@ -99,14 +99,13 @@ community-manager/
 
 ## 환경 변수
 
-### Cloudflare Secrets (운영진만 접근)
+### Secrets (GitHub secret에서 배포 시 주입)
 
 | Key                          | 설명                                       |
 | ---------------------------- | ------------------------------------------ |
 | `DISCORD_PUBLIC_KEY`         | Discord App의 Ed25519 공개키, 서명 검증용 (조직 공용 봇) |
 | `DISCORD_TOKEN`              | Discord Bot Token (조직 공용 봇)           |
 | `DISCORD_APPLICATION_ID`     | Discord Application ID (조직 공용 봇)       |
-| `DISCORD_GUILD_ID`           | 대상 Discord 서버 ID                       |
 | `GITHUB_APP_PRIVATE_KEY`     | GitHub App Private Key (PEM 형식). 조직 시크릿 `APP_PRIVATE_KEY`에서 주입 |
 | `GH_PAT`                     | GitHub PAT (후원 조회 GraphQL용)           |
 | `AI_GATEWAY_TOKEN`           | AI Gateway 통과용 토큰 (달레UI 주간 요약)  |
@@ -118,6 +117,7 @@ community-manager/
 | Key                | 설명              |
 | ------------------ | ----------------- |
 | `GITHUB_ORG`       | GitHub 조직 이름                   |
+| `DISCORD_GUILD_ID` | 대상 Discord 서버 ID               |
 | `GITHUB_APP_ID`    | GitHub App(dalestudy) ID           |
 | `GITHUB_APP_INSTALLATION_ID` | GitHub App의 DaleStudy 조직 Installation ID |
 | `ROLE_TEAM_CONFIG` | 역할-팀 매핑 (JSON, 슬래시 선택지) |
