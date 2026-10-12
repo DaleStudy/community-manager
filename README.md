@@ -107,9 +107,7 @@ community-manager/
 | `DISCORD_TOKEN`              | Discord Bot Token (조직 공용 봇)           |
 | `DISCORD_APPLICATION_ID`     | Discord Application ID (조직 공용 봇)       |
 | `DISCORD_GUILD_ID`           | 대상 Discord 서버 ID                       |
-| `GITHUB_APP_ID`              | GitHub App ID                              |
-| `GITHUB_APP_INSTALLATION_ID` | GitHub App의 조직 Installation ID          |
-| `GITHUB_APP_PRIVATE_KEY`     | GitHub App Private Key (PEM 형식)          |
+| `GITHUB_APP_PRIVATE_KEY`     | GitHub App Private Key (PEM 형식). 조직 시크릿 `APP_PRIVATE_KEY`에서 주입 |
 | `GH_PAT`                     | GitHub PAT (후원 조회 GraphQL용)           |
 | `AI_GATEWAY_TOKEN`           | AI Gateway 통과용 토큰 (달레UI 주간 요약)  |
 
@@ -120,6 +118,8 @@ community-manager/
 | Key                | 설명              |
 | ------------------ | ----------------- |
 | `GITHUB_ORG`       | GitHub 조직 이름                   |
+| `GITHUB_APP_ID`    | GitHub App(dalestudy) ID           |
+| `GITHUB_APP_INSTALLATION_ID` | GitHub App의 DaleStudy 조직 Installation ID |
 | `ROLE_TEAM_CONFIG` | 역할-팀 매핑 (JSON, 슬래시 선택지) |
 | `STUDY_JOIN_CHANNEL_ID` | 리트코드 스터디 신청 포럼 채널 ID (cron 자동 처리) |
 | `BLOG_STUDY_CHANNEL_ID` | 블로그 발행 체크: 리포트/주간 안내를 올릴 채널 ID |
@@ -308,7 +308,7 @@ npm run preview:daleui -- --collect # 수집만 (Claude 호출 없음 = 비용 0
 npm run preview:daleui -- --context # 모델에 넘어가는 원문까지 출력
 ```
 
-`.dev.vars`에 `GITHUB_APP_ID`·`GITHUB_APP_INSTALLATION_ID`·`GITHUB_APP_PRIVATE_KEY`가 필요하고, 요약까지 보려면 `AI_GATEWAY_TOKEN`도 필요합니다. 채널·역할 ID 같은 공개값은 `wrangler.jsonc`에서 읽되 `.dev.vars`가 있으면 그쪽이 우선하므로, 테스트 서버 값으로 덮어써서 돌려볼 수 있습니다.
+`.dev.vars`에 `GITHUB_APP_PRIVATE_KEY`가 필요하고(App ID와 Installation ID는 `wrangler.jsonc`에 있음), 요약까지 보려면 `AI_GATEWAY_TOKEN`도 필요합니다. 채널·역할 ID 같은 공개값은 `wrangler.jsonc`에서 읽되 `.dev.vars`가 있으면 그쪽이 우선하므로, 테스트 서버 값으로 덮어써서 돌려볼 수 있습니다.
 
 게시까지 포함한 전체 흐름을 확인하려면 `.dev.vars`에서 `DISCORD_GUILD_ID`·`DALEUI_CHANNEL_ID`·`DALEUI_ROLE_ID`를 테스트 서버 값으로 바꾼 뒤 실행합니다.
 

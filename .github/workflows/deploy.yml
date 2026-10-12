@@ -11,12 +11,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4.2.2
-
-      - uses: actions/setup-node@v4.4.0
-        with:
-          node-version: "24"
+      - uses: actions/checkout@v7
 
       - run: npm ci
 
@@ -26,17 +24,15 @@ jobs:
     needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4.2.2
-
-      - uses: actions/setup-node@v4.4.0
-        with:
-          node-version: "24"
+      - uses: actions/checkout@v7
 
       - run: npm ci
 
       - name: Deploy
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           secrets: |
@@ -44,8 +40,6 @@ jobs:
             DISCORD_TOKEN
             DISCORD_GUILD_ID
             DISCORD_APPLICATION_ID
-            GITHUB_APP_ID
-            GITHUB_APP_INSTALLATION_ID
             GITHUB_APP_PRIVATE_KEY
             GH_PAT
             AI_GATEWAY_TOKEN
@@ -54,9 +48,6 @@ jobs:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           DISCORD_GUILD_ID: ${{ vars.DISCORD_GUILD_ID }}
           DISCORD_APPLICATION_ID: ${{ secrets.DISCORD_APPLICATION_ID }}
-          # GitHub App: 코드/Worker는 GITHUB_APP_* 를 읽지만, 기존 저장소 secret 이름은 APP_* 라 여기서 매핑
-          GITHUB_APP_ID: ${{ secrets.APP_ID }}
-          GITHUB_APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
           GITHUB_APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           GH_PAT: ${{ secrets.GH_PAT }}
           AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
