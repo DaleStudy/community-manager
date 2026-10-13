@@ -6,6 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "GITHUB_ORG": "DaleStudy",
+    "DISCORD_GUILD_ID": "775115965964222492",
     // GitHub App(dalestudy)의 ID와 DaleStudy 조직 설치 ID. 공개 값이다.
     "GITHUB_APP_ID": "1067270",
     "GITHUB_APP_INSTALLATION_ID": "57497923",
