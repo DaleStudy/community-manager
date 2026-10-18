@@ -1,4 +1,13 @@
 import { readFileSync } from "fs";
+import ts from "typescript";
+
+const { config, error } = ts.parseConfigFileTextToJson(
+  "wrangler.jsonc",
+  readFileSync("wrangler.jsonc", "utf-8"),
+);
+if (error) {
+  throw new Error(ts.flattenDiagnosticMessageText(error.messageText, "\n"));
+}
 
 try {
   const lines = readFileSync(".dev.vars", "utf-8").split("\n");
@@ -12,8 +21,8 @@ try {
 
 const APPLICATION_ID = process.env.DISCORD_APPLICATION_ID!;
 const BOT_TOKEN = process.env.DISCORD_TOKEN!;
-const GUILD_ID = process.env.DISCORD_GUILD_ID!;
-const ROLE_TEAM_CONFIG = JSON.parse(process.env.ROLE_TEAM_CONFIG!);
+const GUILD_ID = config.vars.DISCORD_GUILD_ID;
+const ROLE_TEAM_CONFIG = JSON.parse(config.vars.ROLE_TEAM_CONFIG);
 
 const choices = ROLE_TEAM_CONFIG.map((c: { value: string; label: string }) => ({
   name: c.label,
@@ -64,6 +73,10 @@ const response = await fetch(
     body: JSON.stringify([command]),
   },
 );
+
+if (!response.ok) {
+  throw new Error(`Discord command registration failed (${response.status}): ${await response.text()}`);
+}
 
 const result = await response.json();
 console.log(JSON.stringify(result, null, 2));

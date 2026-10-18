@@ -166,6 +166,14 @@ wrangler deploy --dry-run
 wrangler deploy
 ```
 
+### Discord 명령어 자동 등록
+
+`main`에 머지하면 GitHub Actions가 테스트와 Worker 배포를 마친 뒤 `/verify`를 자동 등록합니다.
+등록에 실패하면 CI도 실패로 표시되지만, 완료된 Worker 배포는 유지됩니다.
+
+등록 대상 서버와 `team`·`role` 선택지는 `wrangler.jsonc`의 `DISCORD_GUILD_ID`와 `ROLE_TEAM_CONFIG`에서 읽습니다.
+기수 변경 시 `ROLE_TEAM_CONFIG`를 수정하면 배포 후 선택지에도 반영됩니다.
+
 ### 현재 배포 상태
 
 - **Worker URL**: https://community-manager.dalestudy.workers.dev
