@@ -26,7 +26,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-it("registers /verify with the guild and choices from JSONC", async () => {
+it("sends /verify registration with the guild, team and role options from JSONC", async () => {
   await import("./register-commands.js");
 
   const [url, request] = fetchMock.mock.calls[0];
