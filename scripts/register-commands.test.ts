@@ -15,18 +15,17 @@ beforeEach(() => {
   }`);
   vi.stubEnv("DISCORD_APPLICATION_ID", "test-app");
   vi.stubEnv("DISCORD_TOKEN", "test-token");
-  fetchMock.mockReset().mockResolvedValue(Response.json({ id: "test-command" }));
+  fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
-  vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
 afterEach(() => {
-  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
 
 it("sends /verify registration with the guild, team and role options from JSONC", async () => {
+  fetchMock.mockResolvedValue(Response.json({ id: "test-command" }));
   await import("./register-commands.js");
 
   const [url, request] = fetchMock.mock.calls[0];
@@ -34,9 +33,8 @@ it("sends /verify registration with the guild, team and role options from JSONC"
   const [command] = JSON.parse(request.body);
   expect(command.name).toBe("verify");
   for (const name of ["team", "role"]) {
-    expect(command.options.find((option: { name: string }) => option.name === name).choices).toEqual([
-      { name: "Test Team", value: "test-team" },
-    ]);
+    const option = command.options.find((option: { name: string }) => option.name === name);
+    expect(option.choices).toEqual([{ name: "Test Team", value: "test-team" }]);
   }
 });
 
