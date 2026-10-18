@@ -33,6 +33,10 @@ export interface Env {
   DALEUI_PROJECT_NUMBER: string;
   /** 달레UI 주간 업데이트: `[{"discordId":"...","github":"..."}]` 형태의 멤버 매핑 */
   DALEUI_MEMBER_MAP: string;
+  /** 모범 리뷰 칭찬: 스레드를 만들 리트코드 스터디 채널 ID */
+  LEETCODE_CHANNEL_ID: string;
+  /** 모범 리뷰 칭찬: 순위에서 제외할 coach 역할 ID */
+  COACH_ROLE_ID: string;
   /** 인증이 켜진 게이트웨이를 통과하기 위한 토큰 (Run 권한) */
   AI_GATEWAY_TOKEN: string;
 }
