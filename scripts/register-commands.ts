@@ -9,16 +9,6 @@ if (error) {
   throw new Error(ts.flattenDiagnosticMessageText(error.messageText, "\n"));
 }
 
-try {
-  const lines = readFileSync(".dev.vars", "utf-8").split("\n");
-  for (const line of lines) {
-    const match = line.match(/^([^=]+)=(.+)$/);
-    if (match && !process.env[match[1]]) {
-      process.env[match[1]] = match[2].replace(/^"|"$/g, "");
-    }
-  }
-} catch {}
-
 const APPLICATION_ID = process.env.DISCORD_APPLICATION_ID!;
 const BOT_TOKEN = process.env.DISCORD_TOKEN!;
 const GUILD_ID = config.vars.DISCORD_GUILD_ID;
