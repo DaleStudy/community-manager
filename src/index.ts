@@ -1,12 +1,13 @@
 import type { Env, RoleTeamConfig } from "./types.js";
 import { getInstallationToken, checkSponsorship, getTeamCreatedAt, inviteToTeam, getTeamMembership } from "./github.js";
 import { getLatestMeetingIssue, getProjectItems, listRecentComments, listRecentIssuesAndPulls } from "./github.js";
+import { getReviewAssignments } from "./github.js";
 import { verifySignature, assignRole, getForumPosts, replyToMessage, addReaction } from "./discord.js";
 import type { Engagement } from "./blog.js";
 import { buildRankingReport, buildWeekRange, classify, computeWeekWindow, firstPostTimes, rankPosts } from "./blog.js";
 import type { WeeklyThread } from "./discord.js";
 import { collectWeeklyThreads, getEngagement, listRoleMembers, postMessage } from "./discord.js";
-import { createThread, listMessages, postMessageWithRoleMention, splitForDiscord } from "./discord.js";
+import { createThread, listMembersWithRoles, listMessages, postMessageWithRoleMention, splitForDiscord } from "./discord.js";
 import {
   SUMMARY_SYSTEM_PROMPT,
   THREAD_NAME_PREFIX,
@@ -19,6 +20,20 @@ import {
   parseMembers,
   reconcileMembers,
 } from "./daleui.js";
+import {
+  LEETCODE_REPO,
+  LOOKBACK_MS,
+  PRAISE_SYSTEM_PROMPT,
+  aggregateReviews,
+  buildMentions,
+  buildPraiseContext,
+  buildPraisePrompt,
+  buildPraiseStarter,
+  buildPraiseThreadName,
+  matchMember,
+  pickTargetWeek,
+  selectWeekPrs,
+} from "./praise.js";
 import { generateSummary } from "./claude.js";
 
 export default {
@@ -63,8 +78,9 @@ export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     // cron 패턴으로 분기
     if (event.cron === "0 0 * * MON") {
-      // 블로그 발행 체크 (월 09:00 KST)
+      // 블로그 발행 체크, 리트코드 모범 리뷰 칭찬 (월 09:00 KST — 주차 마무리 다음 날)
       ctx.waitUntil(handleBlogPublishCheck(env, event.scheduledTime));
+      ctx.waitUntil(handleReviewPraise(env, event.scheduledTime));
     } else if (event.cron === "0 23 * * FRI") {
       // 달레UI 주간 업데이트 (토 08:00 KST — 09:30 회의 1시간 30분 전)
       ctx.waitUntil(handleDaleuiWeeklyUpdate(env, event.scheduledTime));
@@ -467,4 +483,115 @@ async function handleDaleuiWeeklyUpdate(env: Env, referenceMs: number): Promise<
   }
 
   console.log(`[daleui] 게시 완료 threadId=${threadId} 메시지=${chunks.length}개`);
+}
+
+export interface PraiseCollection {
+  week: number;
+  /** 시작 메시지에서 멘션할 현재 기수 역할 ID */
+  cohortRoleId: string;
+  prCount: number;
+  /** 모델에게 넘길 집계 결과 */
+  context: string;
+}
+
+/**
+ * 방금 끝난 주차의 리뷰를 집계한다. 풀이 PR이 없으면(기수 사이) null.
+ * 부수효과가 없는 읽기 전용 단계라 로컬 미리보기(`npm run preview:praise`)에서도 재사용한다.
+ */
+export async function collectReviewPraise(
+  env: Env,
+  referenceMs: number,
+): Promise<PraiseCollection | null> {
+  const org = env.GITHUB_ORG;
+  const sinceIso = new Date(referenceMs - LOOKBACK_MS).toISOString();
+  const ghToken = await getInstallationToken(env);
+
+  const items = await listRecentIssuesAndPulls(org, LEETCODE_REPO, sinceIso, ghToken);
+  const week = pickTargetWeek(items, referenceMs);
+  if (week === null) {
+    console.log(`[praise] 최근 7일 병합된 풀이 PR 없음 — 건너뜀`);
+    return null;
+  }
+  const prs = selectWeekPrs(items, week);
+  // 리뷰는 PR이 열린 직후부터 달리므로, 가장 먼저 열린 PR 시각부터 코멘트를 모은다.
+  const commentsSince = prs.map((pr) => pr.createdAt).sort()[0];
+
+  // 가장 최근에 추가된 기수가 현재 진행 중인 기수다.
+  const config: RoleTeamConfig[] = JSON.parse(env.ROLE_TEAM_CONFIG);
+  const cohortRoleId = config[config.length - 1].discordRoleId;
+
+  const [comments, assignments, members] = await Promise.all([
+    listRecentComments(org, LEETCODE_REPO, commentsSince, ghToken),
+    getReviewAssignments(org, LEETCODE_REPO, prs.map((pr) => pr.number), ghToken),
+    // 코치 명단은 기수마다 바뀌므로 매번 역할로 조회한다.
+    listMembersWithRoles(env.DISCORD_GUILD_ID, [cohortRoleId, env.COACH_ROLE_ID], env.DISCORD_TOKEN),
+  ]);
+
+  const coaches = members.filter((m) => m.roles.includes(env.COACH_ROLE_ID));
+  const review = aggregateReviews({
+    week,
+    prs,
+    comments,
+    assignments,
+    isCoach: (login) => matchMember(login, coaches) !== undefined,
+  });
+
+  const logins = [
+    ...review.reviewers.map((r) => r.login),
+    ...review.threads.map((t) => t.prAuthor),
+  ];
+  const mentions = buildMentions(logins, members);
+
+  console.log(
+    `[praise] WEEK ${week} PR=${prs.length} 리뷰받은PR=${review.reviewedPrs} ` +
+      `리뷰어=${review.reviewers.length} 코치=${coaches.length} 모범후보=${review.threads.length} ` +
+      `멘션매칭=${mentions.size}/${new Set(logins).size}`,
+  );
+
+  return {
+    week,
+    cohortRoleId,
+    prCount: prs.length,
+    context: buildPraiseContext(review, comments, mentions),
+  };
+}
+
+/**
+ * 매주 월요일 09:00(KST) 실행. 일요일에 주차 마무리(PR 일괄 병합)가 끝난 뒤,
+ * 그 주차의 코드 리뷰를 돌아보는 칭찬 스레드를 스터디 채널에 게시한다.
+ *
+ * 수치 집계는 코드가, 어떤 리뷰가 모범적인지에 대한 판단과 문장은 모델이 맡는다.
+ */
+async function handleReviewPraise(env: Env, referenceMs: number): Promise<void> {
+  const token = env.DISCORD_TOKEN;
+  const channelId = env.LEETCODE_CHANNEL_ID;
+
+  const collection = await collectReviewPraise(env, referenceMs);
+  if (!collection) return;
+
+  const message = await generateSummary(
+    PRAISE_SYSTEM_PROMPT,
+    buildPraisePrompt(collection.context),
+    env.AI_GATEWAY_TOKEN,
+  );
+
+  // 역할 멘션은 채널의 시작 메시지에 한 번만. 스레드 안에서는 개인 멘션만 쓴다.
+  const starterId = await postMessageWithRoleMention(
+    channelId,
+    buildPraiseStarter(collection.week, collection.cohortRoleId),
+    token,
+  );
+  const threadId = await createThread(
+    channelId,
+    starterId,
+    buildPraiseThreadName(collection.week),
+    token,
+  );
+
+  const chunks = splitForDiscord(message);
+  for (const chunk of chunks) {
+    await postMessage(threadId, chunk, token);
+  }
+
+  console.log(`[praise] 게시 완료 threadId=${threadId} 메시지=${chunks.length}개`);
 }

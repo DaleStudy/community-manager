@@ -25,6 +25,8 @@
     "DALEUI_CHANNEL_ID": "1280152682044063837",
     "DALEUI_ROLE_ID": "1344825555995852870",
     "DALEUI_PROJECT_NUMBER": "18",
+    "LEETCODE_CHANNEL_ID": "1229860988170403901",
+    "COACH_ROLE_ID": "1229863051776233593",
     "DALEUI_MEMBER_MAP": "[{\"discordId\":\"267646459187298305\",\"github\":\"DaleSeo\"},{\"discordId\":\"299178466996256778\",\"github\":\"yolophg\"},{\"discordId\":\"701107097659506699\",\"github\":\"SimYunSup\"},{\"discordId\":\"840925933538902016\",\"github\":\"RiaOh\"},{\"discordId\":\"913798074957172777\",\"github\":\"jj5u\"},{\"discordId\":\"960173224937812099\",\"github\":\"hyoseong1994\"},{\"discordId\":\"1065143836562698291\",\"github\":\"sseung30\"}]",
   },
   "kv_namespaces": [],
@@ -40,7 +42,7 @@
   },
   "triggers": {
     // "*/20 * * * *": 가입 처리
-    // "0 0 * * MON"(월 00:00 UTC = 09:00 KST): 블로그 발행 체크
+    // "0 0 * * MON"(월 00:00 UTC = 09:00 KST): 블로그 발행 체크, 리트코드 모범 리뷰 칭찬
     // "0 23 * * FRI"(금 23:00 UTC = 토 08:00 KST): 달레UI 주간 업데이트 (09:30 회의 전)
     "crons": ["*/20 * * * *", "0 0 * * MON", "0 23 * * FRI"],
   },
