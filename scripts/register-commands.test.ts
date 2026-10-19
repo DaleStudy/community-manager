@@ -1,18 +1,10 @@
-import { readFileSync } from "fs";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-
-vi.mock("fs", () => ({ readFileSync: vi.fn() }));
+import { readWranglerVars } from "./wrangler-vars.js";
 
 const fetchMock = vi.fn();
 
 beforeEach(() => {
   vi.resetModules();
-  vi.mocked(readFileSync).mockReturnValue(String.raw`{
-    "vars": {
-      "DISCORD_GUILD_ID": "test-guild",
-      "ROLE_TEAM_CONFIG": "[{\"value\":\"test-team\",\"label\":\"Test Team\"}]",
-    },
-  }`);
   vi.stubEnv("DISCORD_APPLICATION_ID", "test-app");
   vi.stubEnv("DISCORD_TOKEN", "test-token");
   fetchMock.mockReset();
@@ -24,17 +16,24 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-it("sends /verify registration with the guild, team and role options from JSONC", async () => {
+it("sends /verify registration with the configured guild, team and role options", async () => {
+  const vars = readWranglerVars();
+  const teams = JSON.parse(vars.ROLE_TEAM_CONFIG);
   fetchMock.mockResolvedValue(Response.json({ id: "test-command" }));
   await import("./register-commands.js");
 
   const [url, request] = fetchMock.mock.calls[0];
-  expect(url).toBe("https://discord.com/api/v10/applications/test-app/guilds/test-guild/commands");
+  expect(url).toBe(
+    `https://discord.com/api/v10/applications/test-app/guilds/${vars.DISCORD_GUILD_ID}/commands`,
+  );
   const [command] = JSON.parse(request.body);
   expect(command.name).toBe("verify");
   for (const name of ["team", "role"]) {
     const option = command.options.find((option: { name: string }) => option.name === name);
-    expect(option.choices).toEqual([{ name: "Test Team", value: "test-team" }]);
+    expect(option.choices).toHaveLength(teams.length);
+    for (const [index, team] of teams.entries()) {
+      expect(option.choices[index]).toEqual({ name: team.label, value: team.value });
+    }
   }
 });
 

@@ -1,18 +1,11 @@
-import { readFileSync } from "fs";
-import ts from "typescript";
+import { readWranglerVars } from "./wrangler-vars.js";
 
-const { config, error } = ts.parseConfigFileTextToJson(
-  "wrangler.jsonc",
-  readFileSync("wrangler.jsonc", "utf-8"),
-);
-if (error) {
-  throw new Error(ts.flattenDiagnosticMessageText(error.messageText, "\n"));
-}
+const vars = readWranglerVars();
 
 const APPLICATION_ID = process.env.DISCORD_APPLICATION_ID!;
 const BOT_TOKEN = process.env.DISCORD_TOKEN!;
-const GUILD_ID = config.vars.DISCORD_GUILD_ID;
-const ROLE_TEAM_CONFIG = JSON.parse(config.vars.ROLE_TEAM_CONFIG);
+const GUILD_ID = vars.DISCORD_GUILD_ID;
+const ROLE_TEAM_CONFIG = JSON.parse(vars.ROLE_TEAM_CONFIG);
 
 const choices = ROLE_TEAM_CONFIG.map((c: { value: string; label: string }) => ({
   name: c.label,
