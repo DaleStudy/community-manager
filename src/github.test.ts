@@ -37,6 +37,9 @@ function makeSponsorshipResponse(
   endCursor: string | null = null,
 ) {
   return {
+    ok: true,
+    status: 200,
+    headers: new Headers(),
     json: () =>
       Promise.resolve({
         data: {
@@ -60,6 +63,24 @@ beforeEach(() => {
 });
 
 describe("checkSponsorship", () => {
+  it.each([401, 403])("HTTP %i는 후원 없음 대신 조회 실패로 처리한다", async (status) => {
+    const response = new Response(JSON.stringify({ message: "private-response-body" }), {
+      status,
+      headers: { "x-github-request-id": "ABCD:1234" },
+    });
+    const readBody = vi.spyOn(response, "json");
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(checkSponsorship("octocat", "DaleStudy", "test-token"))
+      .rejects.toThrow(`GitHub 후원 조회에 실패했습니다. (HTTP ${status})`);
+    expect(readBody).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledExactlyOnceWith("[sponsorship] response", {
+      httpStatus: status,
+      requestId: "ABCD:1234",
+    });
+  });
+
   it("후원 이력이 없으면 sponsored: false를 반환한다", async () => {
     vi.stubGlobal(
       "fetch",
@@ -148,6 +169,9 @@ describe("checkSponsorship", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
         json: () =>
           Promise.resolve({
             errors: [{ message: "Unauthorized" }],
@@ -240,6 +264,9 @@ describe("checkSponsorship", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
         json: () =>
           Promise.resolve({
             data: {

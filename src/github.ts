@@ -88,6 +88,14 @@ export async function checkSponsorship(
       body: JSON.stringify({ query, variables: { org, cursor } }),
     });
 
+    console.log("[sponsorship] response", {
+      httpStatus: response.status,
+      requestId: response.headers.get("x-github-request-id"),
+    });
+    if (!response.ok) {
+      throw new Error(`GitHub 후원 조회에 실패했습니다. (HTTP ${response.status})`);
+    }
+
     const result = (await response.json()) as any;
 
     if (result.errors) {
