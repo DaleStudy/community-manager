@@ -116,7 +116,7 @@ async function processVerify(
   if (!roleConfig || !teamConfig) {
     console.log(`[verify] invalid role=${roleValue} or team=${teamValue}`);
     const validTeams = config.map((c) => c.value).join(", ");
-    return `⚠️ 잘못된 team 값입니다: \`${teamValue}\`\n유효한 team: ${validTeams}\n포스트 **제목(title)** 을 아래 형식으로 작성해주세요. (두 번째 값은 닉네임이 아니라 팀 식별자입니다)\n\`\`\`\n리트코드 스터디 9기 신청 (github_username, team)\n\`\`\``;
+    return `⚠️ 잘못된 team 값입니다: \`${teamValue}\`\n유효한 team: ${validTeams}\n포스트 **제목(title)** 을 아래 형식으로 작성해주세요. (두 번째 값은 닉네임이 아니라 팀 식별자입니다)\n\`\`\`\n리트코드 스터디 신청 (github_username, ${config[config.length - 1].value})\n\`\`\``;
   }
 
   const token = await getInstallationToken(env);
@@ -198,10 +198,11 @@ async function handleLeetCodeSignUp(env: Env): Promise<void> {
 
     if (!parsed) {
       console.log(`[cron] parse failed threadId=${threadId}`);
+      const config: RoleTeamConfig[] = JSON.parse(env.ROLE_TEAM_CONFIG);
       await replyToMessage(
         threadId,
         msg.id,
-        "⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 작성해주세요.\n```\n리트코드 스터디 9기 신청 (github_username, team)\n```",
+        `⚠️ 메시지 형식이 올바르지 않습니다. 포스트 **제목(title)** 에 아래 형식으로 작성해주세요.\n\`\`\`\n리트코드 스터디 신청 (github_username, ${config[config.length - 1].value})\n\`\`\``,
         env.DISCORD_TOKEN,
       );
       await addReaction(threadId, msg.id, "❌", env.DISCORD_TOKEN);
