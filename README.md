@@ -173,6 +173,7 @@ wrangler deploy
 
 등록 대상 서버와 `team`·`role` 선택지는 `wrangler.jsonc`의 `DISCORD_GUILD_ID`와 `ROLE_TEAM_CONFIG`에서 읽습니다.
 기수 변경 시 `ROLE_TEAM_CONFIG`를 수정하면 배포 후 선택지에도 반영됩니다.
+등록은 CI에서만 수행합니다.
 
 ### 현재 배포 상태
 
