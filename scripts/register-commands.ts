@@ -1,19 +1,11 @@
-import { readFileSync } from "fs";
+import { readWranglerVars } from "./wrangler-vars.js";
 
-try {
-  const lines = readFileSync(".dev.vars", "utf-8").split("\n");
-  for (const line of lines) {
-    const match = line.match(/^([^=]+)=(.+)$/);
-    if (match && !process.env[match[1]]) {
-      process.env[match[1]] = match[2].replace(/^"|"$/g, "");
-    }
-  }
-} catch {}
+const vars = readWranglerVars();
 
 const APPLICATION_ID = process.env.DISCORD_APPLICATION_ID!;
 const BOT_TOKEN = process.env.DISCORD_TOKEN!;
-const GUILD_ID = process.env.DISCORD_GUILD_ID!;
-const ROLE_TEAM_CONFIG = JSON.parse(process.env.ROLE_TEAM_CONFIG!);
+const GUILD_ID = vars.DISCORD_GUILD_ID;
+const ROLE_TEAM_CONFIG = JSON.parse(vars.ROLE_TEAM_CONFIG);
 
 const choices = ROLE_TEAM_CONFIG.map((c: { value: string; label: string }) => ({
   name: c.label,
@@ -64,6 +56,10 @@ const response = await fetch(
     body: JSON.stringify([command]),
   },
 );
+
+if (!response.ok) {
+  throw new Error(`Discord command registration failed (${response.status}): ${await response.text()}`);
+}
 
 const result = await response.json();
 console.log(JSON.stringify(result, null, 2));

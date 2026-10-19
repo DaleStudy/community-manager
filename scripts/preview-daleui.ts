@@ -8,27 +8,11 @@
  *   npm run preview:daleui -- --collect # 수집만 (Claude 호출 없음 = 비용 0)
  *   npm run preview:daleui -- --context # 모델에 넘어가는 원문까지 출력
  */
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { readWranglerVars } from "./wrangler-vars.js";
 import { collectDaleuiUpdate } from "../src/index.js";
 import { generateSummary } from "../src/claude.js";
 import { SUMMARY_SYSTEM_PROMPT, buildUserPrompt, splitForDiscord } from "../src/daleui.js";
 import type { Env } from "../src/types.js";
-
-const here = dirname(fileURLToPath(import.meta.url));
-
-/**
- * wrangler.jsonc 의 vars 를 읽는다. 로컬 실행에는 wrangler 가 값을 주입해주지 않으므로
- * 같은 파일을 직접 읽어 쓴다. 주석과 trailing comma 만 걷어내면 JSON 으로 파싱된다.
- */
-function readWranglerVars(): Record<string, string> {
-  const raw = readFileSync(join(here, "..", "wrangler.jsonc"), "utf8");
-  const json = raw
-    .replace(/^\s*\/\/.*$/gm, "") // 줄 전체 주석
-    .replace(/,(\s*[}\]])/g, "$1"); // trailing comma
-  return JSON.parse(json).vars ?? {};
-}
 
 /** 수집에 필요한 시크릿 — .dev.vars 에서 온다. */
 const COLLECT_SECRETS = ["DISCORD_TOKEN", "GITHUB_APP_PRIVATE_KEY"];
