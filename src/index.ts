@@ -512,7 +512,7 @@ export async function collectReviewPraise(
     console.log(`[praise] 최근 7일 병합된 풀이 PR 없음 — 건너뜀`);
     return null;
   }
-  const prs = selectWeekPrs(items, week);
+  const prs = selectWeekPrs(items, week, referenceMs);
   // 리뷰는 PR이 열린 직후부터 달리므로, 가장 먼저 열린 PR 시각부터 코멘트를 모은다.
   const commentsSince = prs.map((pr) => pr.createdAt).sort()[0];
 
@@ -520,13 +520,15 @@ export async function collectReviewPraise(
   const config: RoleTeamConfig[] = JSON.parse(env.ROLE_TEAM_CONFIG);
   const cohortRoleId = config[config.length - 1].discordRoleId;
 
-  const [comments, assignments, members] = await Promise.all([
+  const [allComments, assignments, members] = await Promise.all([
     listRecentComments(org, LEETCODE_REPO, commentsSince, ghToken),
     getReviewAssignments(org, LEETCODE_REPO, prs.map((pr) => pr.number), ghToken),
     // 코치 명단은 기수마다 바뀌므로 매번 역할로 조회한다.
     listMembersWithRoles(env.DISCORD_GUILD_ID, [cohortRoleId, env.COACH_ROLE_ID], env.DISCORD_TOKEN),
   ]);
 
+  // 과거 시점을 재생할 때 기준 시각 뒤에 달린 코멘트가 집계에 섞이지 않게 한다.
+  const comments = allComments.filter((c) => Date.parse(c.createdAt) <= referenceMs);
   const coaches = members.filter((m) => m.roles.includes(env.COACH_ROLE_ID));
   const review = aggregateReviews({
     week,

@@ -136,7 +136,12 @@ describe("selectWeekPrs", () => {
       pr(3, "c", { state: "open", mergedAt: null }),
       pr(4, "d", { title: "[d] WEEK 02 Solutions" }),
     ];
-    expect(selectWeekPrs(items, 1).map((p) => p.number)).toEqual([1, 3]);
+    expect(selectWeekPrs(items, 1, REF).map((p) => p.number)).toEqual([1, 3]);
+  });
+
+  it("기준 시각 뒤에 열린 다음 기수의 같은 주차 PR은 뺀다", () => {
+    const items = [pr(1, "a"), pr(2, "b", { createdAt: "2027-02-02T00:00:00Z" })];
+    expect(selectWeekPrs(items, 1, REF).map((p) => p.number)).toEqual([1]);
   });
 });
 

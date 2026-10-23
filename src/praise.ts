@@ -56,13 +56,18 @@ export function pickTargetWeek(items: ActivityItem[], nowMs: number): number | n
   return best;
 }
 
-/** 대상 주차의 풀이 PR. 병합 없이 닫힌 PR은 중복 제출이라 뺀다. */
-export function selectWeekPrs(items: ActivityItem[], week: number): ActivityItem[] {
+/**
+ * 대상 주차의 풀이 PR. 병합 없이 닫힌 PR은 중복 제출이라 뺀다.
+ * 주차 번호는 기수마다 다시 시작하므로, 과거 시점을 재생할 때 다음 기수의 같은 주차 PR이
+ * 섞이지 않도록 기준 시각(nowMs) 뒤에 열린 PR도 뺀다.
+ */
+export function selectWeekPrs(items: ActivityItem[], week: number, nowMs: number): ActivityItem[] {
   return items.filter(
     (it) =>
       it.isPullRequest &&
       parseWeek(it.title) === week &&
-      !(it.state === "closed" && !it.mergedAt),
+      !(it.state === "closed" && !it.mergedAt) &&
+      Date.parse(it.createdAt) <= nowMs,
   );
 }
 
