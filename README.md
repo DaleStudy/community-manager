@@ -6,12 +6,13 @@ Discord slash command `/verify <github_username>` → GitHub 후원 확인 → G
 
 ## 개요
 
-DaleStudy 커뮤니티 운영을 자동화하는 Cloudflare Worker 기반 Discord 봇입니다. 하나의 Worker가 세 가지 작업을 처리합니다.
+DaleStudy 커뮤니티 운영을 자동화하는 Cloudflare Worker 기반 Discord 봇입니다. 하나의 Worker가 다섯 가지 작업을 처리합니다.
 
 1. **`/verify` 슬래시 명령**: 사용자의 GitHub 후원 여부를 확인해, 후원자인 경우 GitHub 조직 팀에 초대하고 Discord 역할(Role)을 부여합니다.
 2. **리트코드 스터디 가입 처리** (cron, 20분 주기): 스터디 신청 포럼에 올라온 글을 폴링해 위 검증 로직을 자동 적용합니다.
 3. **블로그 발행 체크** (cron, 매주 월요일 09:00 KST): `blog` 역할 대상자가 이번 주 블로그를 발행(블로그글-공유 포럼에 게시글 작성)했는지 확인해 리포트와 새 주 시작 안내를 올리고, 베스트 글 선정용 순위표를 운영진 채널에 게시합니다.
 4. **달레UI 주간 업데이트** (cron, 매주 토요일 08:00 KST): 디자인시스템 팀의 주간 회의(09:30) 전에 GitHub(이슈·PR·코멘트·프로젝트 보드)과 Discord 활동을 취합해 개인 업데이트 스레드를 만들고 멤버별 요약을 게시합니다. 요약 작성은 Claude API가 맡습니다.
+5. **리트코드 모범 리뷰 칭찬** (cron, 매주 월요일 09:00 KST): 방금 끝난 주차의 풀이 PR에 오간 코드 리뷰를 집계해, 리뷰를 잘한 멤버와 모범 리뷰를 소개하는 스레드를 스터디 채널에 게시합니다. 집계는 코드가, 모범 리뷰 선정과 문장은 Claude API가 맡습니다.
 
 ## 아키텍처
 
@@ -86,11 +87,14 @@ community-manager/
 │   ├── github.ts         # GitHub GraphQL/REST API 호출
 │   ├── blog.ts           # 블로그 발행 체크 로직 (KST 주간 경계·발행 상태 분류·베스트 글 순위)
 │   ├── daleui.ts         # 달레UI 주간 업데이트 로직 (취합 기간·컨텍스트 구성·요약 프롬프트·메시지 분할)
+│   ├── praise.ts         # 리트코드 모범 리뷰 칭찬 로직 (대상 주차·리뷰 집계·모범 리뷰 후보·프롬프트)
 │   ├── claude.ts         # Claude API 호출 (멤버별 요약 생성)
 │   └── types.ts          # 공통 타입 정의
 ├── scripts/
 │   ├── register-commands.ts # Discord slash command 등록 (npm run register)
-│   └── preview-daleui.ts    # 달레UI 주간 업데이트 로컬 미리보기 (게시하지 않음)
+│   ├── preview-daleui.ts    # 달레UI 주간 업데이트 로컬 미리보기 (게시하지 않음)
+│   ├── preview-praise.ts    # 리트코드 모범 리뷰 칭찬 로컬 미리보기 (게시하지 않음)
+│   └── wrangler-vars.ts     # 미리보기 스크립트용 wrangler.jsonc vars 읽기
 ├── wrangler.jsonc        # Cloudflare Worker 설정
 ├── tsconfig.json         # TypeScript 설정
 ├── package.json          # Node.js 패키지 설정
@@ -108,7 +112,7 @@ community-manager/
 | `DISCORD_APPLICATION_ID`     | Discord Application ID (조직 공용 봇)       |
 | `GITHUB_APP_PRIVATE_KEY`     | GitHub App Private Key (PEM 형식). 조직 시크릿 `APP_PRIVATE_KEY`에서 주입 |
 | `GH_PAT`                     | GitHub PAT (후원 조회 GraphQL용)           |
-| `AI_GATEWAY_TOKEN`           | AI Gateway 통과용 토큰 (달레UI 주간 요약)  |
+| `AI_GATEWAY_TOKEN`           | AI Gateway 통과용 토큰 (달레UI 주간 요약, 모범 리뷰 칭찬) |
 
 > **봇 자격증명 일원화**: `DISCORD_TOKEN`·`DISCORD_PUBLIC_KEY`·`DISCORD_APPLICATION_ID`는 커뮤니티 공용 봇(`DaleStudy`)의 **조직 레벨** 시크릿이며, CI(GitHub Actions) 배포 시 자동으로 주입됩니다. 저장소별로 개인 봇 자격증명을 따로 관리하지 않습니다.
 
@@ -130,6 +134,8 @@ community-manager/
 | `DALEUI_ROLE_ID`        | 달레UI 주간 업데이트: 대상 `designsystem` 역할 ID |
 | `DALEUI_PROJECT_NUMBER` | 달레UI 주간 업데이트: 프로젝트 보드(projectV2) 번호 |
 | `DALEUI_MEMBER_MAP`     | 달레UI 주간 업데이트: Discord ID ↔ GitHub 핸들 매핑 (JSON) |
+| `LEETCODE_CHANNEL_ID`   | 모범 리뷰 칭찬: 스레드를 만들 리트코드 스터디 채널 ID |
+| `COACH_ROLE_ID`         | 모범 리뷰 칭찬: 순위에서 제외할 `coach` 역할 ID |
 
 ### 로컬 개발 (.dev.vars)
 
@@ -327,6 +333,43 @@ curl "http://localhost:8787/__scheduled?cron=0+23+*+*+FRI"
 ```
 
 > ⚠️ 오버라이드 없이 `wrangler dev`로 cron을 트리거하면 **운영 채널에 실제로 게시되고 역할 멘션이 발송됩니다.** 로컬이라고 해서 Discord 호출이 막히지는 않습니다.
+
+### 리트코드 모범 리뷰 칭찬 (주간 cron)
+
+매주 월요일 09:00 KST(`0 0 * * MON`, 블로그 발행 체크와 같은 cron)에 실행되어, 방금 끝난 주차의 코드 리뷰를 돌아보는 스레드를 리트코드 스터디 채널에 게시합니다. 리뷰를 잘한 멤버를 칭찬해 코드 리뷰 문화를 북돋는 것이 목적입니다.
+
+#### 대상 주차
+
+최근 7일 안에 **병합된** 풀이 PR(`[이름] WEEK NN Solutions`)에서 가장 많이 등장한 주차입니다. 주차 마무리 때 그 주차 PR이 일괄 병합되므로 병합 시각이 끝난 주차를 확실히 가리킵니다. 병합된 풀이 PR이 없으면(기수 사이) 아무것도 게시하지 않습니다.
+
+#### 집계 (코드)
+
+| 항목 | 규칙 |
+|---|---|
+| 리뷰 | 인라인 리뷰 코멘트, PR 하단 코멘트, 코멘트 없는 승인을 모두 셉니다. 본인 PR에 단 답글과 AI 코치 봇은 뺍니다 |
+| 코치·운영자 | `COACH_ROLE_ID` 역할 보유자와 운영자는 순위에서 분리해 참고용으로만 넘깁니다. 리뷰가 본업이라 그대로 두면 상위권을 독점합니다 |
+| 커버리지 | 동료 리뷰를 받은 PR 비율과, 코치·운영자를 뺀 멤버끼리의 비율을 함께 계산합니다 |
+| 자발적 리뷰 | 리뷰 요청을 받은 적 없는 PR에 들어가 리뷰한 경우입니다 (`ReviewRequestedEvent` 기준) |
+| 모범 리뷰 후보 | 리뷰어 질문 → 작성자 답변 → 리뷰어 재응답처럼 왕복한 인라인 대화를 우선합니다. 그런 대화가 없는 주차는 질문과 답변 2건짜리까지 넓힙니다. 리뷰어가 코치·운영자인 대화는 뺍니다 |
+
+GitHub 아이디와 Discord 계정은 현재 기수 역할(`ROLE_TEAM_CONFIG`의 마지막 항목)과 코치 역할 멤버의 username·닉네임·표시 이름을 대조해 맞춥니다. 매칭되지 않은 사람은 멘션 없이 이름으로만 씁니다.
+
+#### 메시지 작성 (Claude)
+
+집계 결과를 Claude에 넘겨 칭찬 본문을 받습니다. **수치는 코드가 계산해 넘기고**, 어떤 리뷰가 모범적인지(질문 중심, 상호 배려, 언어 무관)와 문장은 모델이 맡습니다. 게시 방식은 달레UI 주간 업데이트와 같습니다. 역할 멘션은 채널의 시작 메시지에 한 번만 쓰고, 스레드 안에는 개인 멘션만 씁니다.
+
+> 대상 주차 판정, 리뷰 집계, 모범 리뷰 후보 선정, 컨텍스트 구성, 프롬프트는 [`src/praise.ts`](src/praise.ts)에 순수 함수로 있고 단위 테스트([`src/praise.test.ts`](src/praise.test.ts))로 검증합니다.
+
+#### 로컬에서 미리 보기
+
+```bash
+npm run preview:praise                                # 수집 + 메시지 생성
+npm run preview:praise -- --collect                   # 수집만 (Claude 호출 없음 = 비용 0)
+npm run preview:praise -- --context                   # 모델에 넘어가는 집계 결과까지 출력
+npm run preview:praise -- --at 2026-08-10T00:00:00Z   # 그 시각에 cron 이 돌았다고 보고 실행
+```
+
+`--at`으로 지난 주차를 다시 돌려볼 수 있습니다. Discord 멤버 조회는 `DISCORD_GUILD_ID`를 쓰므로, `.dev.vars`에서 테스트 서버로 덮어써 뒀다면 운영 서버 ID를 앞에 붙여 실행합니다. (예: `DISCORD_GUILD_ID=775115965964222492 npm run preview:praise`) 조회만 하므로 운영 서버에 아무것도 올라가지 않습니다.
 
 ## 라이선스
 

@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "register": "tsx scripts/register-commands.ts",
-    "preview:daleui": "tsx --env-file=.dev.vars scripts/preview-daleui.ts"
+    "preview:daleui": "tsx --env-file=.dev.vars scripts/preview-daleui.ts",
+    "preview:praise": "tsx --env-file=.dev.vars scripts/preview-praise.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261012.1",
