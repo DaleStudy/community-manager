@@ -5,9 +5,6 @@ import type { ChannelMessage } from "./discord.js";
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Discord 메시지 하나에 들어갈 수 있는 최대 글자 수 */
-export const DISCORD_MESSAGE_LIMIT = 2000;
-
 /** 봇이 만드는 업데이트 스레드 이름의 접두사 — 채널 목록에서 눈에 띄게 한다. */
 export const THREAD_NAME_PREFIX = "🧵";
 
@@ -189,76 +186,6 @@ GitHub과 Discord에서 모은 활동 흔적을 받아, 멤버별 업데이트 �
 /** 모델에게 넘길 사용자 메시지 */
 export function buildUserPrompt(context: string): string {
   return `아래는 이번 주 수집된 활동 흔적이다. 이걸로 멤버별 업데이트 요약을 작성해줘.\n\n${context}`;
-}
-
-/**
- * Discord 메시지 길이 제한에 맞춰 나눈다. 멤버 구분자인 H3 헤더(\`### \`) 경계에서만
- * 자르므로 한 사람의 요약이 두 메시지에 걸치지 않는다.
- * 한 블록이 그 자체로 제한을 넘으면 줄 단위로 마저 나눈다.
- */
-export function splitForDiscord(text: string, limit = DISCORD_MESSAGE_LIMIT): string[] {
-  const blocks: string[] = [];
-  let current: string[] = [];
-
-  for (const line of text.split("\n")) {
-    if (line.startsWith("### ") && current.length > 0) {
-      blocks.push(current.join("\n"));
-      current = [];
-    }
-    current.push(line);
-  }
-  if (current.length > 0) blocks.push(current.join("\n"));
-
-  const messages: string[] = [];
-  let buffer = "";
-
-  const flush = () => {
-    if (buffer.trim()) messages.push(buffer.trim());
-    buffer = "";
-  };
-
-  for (const block of blocks) {
-    if (block.length > limit) {
-      flush();
-      messages.push(...splitByLine(block, limit));
-      continue;
-    }
-    if (buffer.length + block.length + 1 > limit) flush();
-    buffer = buffer ? `${buffer}\n${block}` : block;
-  }
-  flush();
-
-  return messages;
-}
-
-/** 헤더 경계로도 안 되는 큰 덩어리를 줄 단위로 쪼갠다. */
-function splitByLine(block: string, limit: number): string[] {
-  const out: string[] = [];
-  let buffer = "";
-
-  for (const line of block.split("\n")) {
-    for (const piece of chunkLine(line, limit)) {
-      if (buffer.length + piece.length + 1 > limit) {
-        if (buffer.trim()) out.push(buffer.trim());
-        buffer = piece;
-      } else {
-        buffer = buffer ? `${buffer}\n${piece}` : piece;
-      }
-    }
-  }
-  if (buffer.trim()) out.push(buffer.trim());
-
-  return out;
-}
-
-/** 제한보다 긴 한 줄은 버리지 않고 제한 크기로 마저 나눈다. */
-function chunkLine(line: string, limit: number): string[] {
-  if (line.length <= limit) return [line];
-
-  const pieces: string[] = [];
-  for (let i = 0; i < line.length; i += limit) pieces.push(line.slice(i, i + limit));
-
-  return pieces;
 }
 
 /** 채널에 올릴 스레드 시작 메시지 — 역할 멘션은 여기 한 번만 등장한다. */

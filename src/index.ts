@@ -6,7 +6,7 @@ import type { Engagement } from "./blog.js";
 import { buildRankingReport, buildWeekRange, classify, computeWeekWindow, firstPostTimes, rankPosts } from "./blog.js";
 import type { WeeklyThread } from "./discord.js";
 import { collectWeeklyThreads, getEngagement, listRoleMembers, postMessage } from "./discord.js";
-import { createThread, listMessages, postMessageWithRoleMention } from "./discord.js";
+import { createThread, listMessages, postMessageWithRoleMention, splitForDiscord } from "./discord.js";
 import {
   SUMMARY_SYSTEM_PROMPT,
   THREAD_NAME_PREFIX,
@@ -18,7 +18,6 @@ import {
   formatPeriod,
   parseMembers,
   reconcileMembers,
-  splitForDiscord,
 } from "./daleui.js";
 import { generateSummary } from "./claude.js";
 

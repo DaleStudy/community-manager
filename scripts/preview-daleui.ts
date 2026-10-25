@@ -11,7 +11,8 @@
 import { readWranglerVars } from "./wrangler-vars.js";
 import { collectDaleuiUpdate } from "../src/index.js";
 import { generateSummary } from "../src/claude.js";
-import { SUMMARY_SYSTEM_PROMPT, buildUserPrompt, splitForDiscord } from "../src/daleui.js";
+import { SUMMARY_SYSTEM_PROMPT, buildUserPrompt } from "../src/daleui.js";
+import { splitForDiscord } from "../src/discord.js";
 import type { Env } from "../src/types.js";
 
 /** 수집에 필요한 시크릿 — .dev.vars 에서 온다. */
