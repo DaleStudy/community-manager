@@ -9,18 +9,22 @@ const MAX_TOKENS = 16000;
 
 const ANTHROPIC_VERSION = "2023-06-01";
 
-/** 게이트웨이가 있는 Cloudflare 계정. 배포 계정(wrangler.jsonc 의 account_id)과 다르다. */
-const GATEWAY_ACCOUNT_ID = "86aa227176a624680f7d34e691472576";
+/**
+ * Worker 와 같은 계정(dalestudy)의 게이트웨이. AI 바인딩으로 부르므로 인증 토큰이 없고,
+ * Anthropic 키는 게이트웨이에 BYOK 로 저장돼 있다. 게이트웨이가 BYOK only 라 키가 빠지면
+ * Unified Billing 으로 넘어가지 않고 실패한다.
+ */
 const GATEWAY_ID = "dalestudy";
 
 /**
- * AI Gateway 를 거치는 Anthropic Messages 엔드포인트.
- *
- * 게이트웨이 ID 가 경로에 들어가므로 어느 게이트웨이로 갔는지 URL 만 보면 알 수 있다.
- * (Unified Billing REST 경로는 `cf-aig-gateway-id` 헤더를 빠뜨리면 default 게이트웨이로
- * 조용히 흘러가지만, 이 경로는 그런 함정이 없다.)
+ * 재시도는 게이트웨이에 맡긴다. Worker 안에서 돌리면 CPU 예산을 깎지만,
+ * 엣지에서 재시도하면 응답을 기다리는 시간일 뿐이라 CPU 를 쓰지 않는다.
  */
-const ENDPOINT = `https://gateway.ai.cloudflare.com/v1/${GATEWAY_ACCOUNT_ID}/${GATEWAY_ID}/anthropic/v1/messages`;
+const RETRY_HEADERS = {
+  "cf-aig-max-attempts": 3,
+  "cf-aig-retry-delay": 1000,
+  "cf-aig-backoff": "exponential",
+};
 
 /** Anthropic Messages API 응답 중 실제로 쓰는 부분만 */
 interface MessagesResponse {
@@ -39,29 +43,22 @@ interface MessagesResponse {
 export async function generateSummary(
   systemPrompt: string,
   userPrompt: string,
-  gatewayToken: string,
+  ai: Ai,
 ): Promise<string> {
-  const response = await fetch(ENDPOINT, {
-    method: "POST",
+  const response = await ai.gateway(GATEWAY_ID).run({
+    provider: "anthropic",
+    endpoint: "v1/messages",
     headers: {
       "content-type": "application/json",
       "anthropic-version": ANTHROPIC_VERSION,
-      // 인증이 켜진 게이트웨이는 이 헤더가 없으면 게이트웨이 존재 여부도 알려주지 않고 401 을 낸다.
-      "cf-aig-authorization": `Bearer ${gatewayToken}`,
-      // 재시도는 게이트웨이에 맡긴다. Worker 안에서 돌리면 CPU 예산을 깎지만,
-      // 엣지에서 재시도하면 응답을 기다리는 시간일 뿐이라 CPU 를 쓰지 않는다.
-      "cf-aig-max-attempts": "3",
-      "cf-aig-retry-delay": "1000",
-      "cf-aig-backoff": "exponential",
-      // x-api-key 는 보내지 않는다. 게이트웨이가 저장된 키(BYOK)를 끼워 넣는데,
-      // 요청에 키가 실려 있으면 그대로 전달돼 401 이 난다.
+      ...RETRY_HEADERS,
     },
-    body: JSON.stringify({
+    query: {
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
-    }),
+    },
   });
 
   if (!response.ok) {

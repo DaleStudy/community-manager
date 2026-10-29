@@ -4,6 +4,10 @@
   "compatibility_date": "2024-01-01",
   "account_id": "94480614a6df7731f1e4491bdac5c440",
   "compatibility_flags": ["nodejs_compat"],
+  // 같은 계정의 AI Gateway(dalestudy)를 토큰 없이 부른다
+  "ai": {
+    "binding": "AI"
+  },
   "observability": {
     "logs": {
       "enabled": true,

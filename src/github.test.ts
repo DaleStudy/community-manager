@@ -28,7 +28,7 @@ const mockEnv: Env = {
   DALEUI_ROLE_ID: "test-daleui-role-id",
   DALEUI_PROJECT_NUMBER: "18",
   DALEUI_MEMBER_MAP: "[]",
-  AI_GATEWAY_TOKEN: "test-gateway-token",
+  AI: {} as Ai,
 };
 
 function makeSponsorshipResponse(
