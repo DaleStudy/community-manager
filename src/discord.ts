@@ -239,41 +239,40 @@ export async function collectWeeklyThreads(
 }
 
 /**
- * 게시글의 반응/댓글을 집계한다. 작성자 본인과 봇의 기여는 제외한다.
- * 포럼 게시글은 스레드 ID가 곧 첫 메시지 ID라서, 스레드 메시지 목록 한 번이면
- * 첫 글에 달린 반응 종류와 댓글 작성자를 모두 얻는다.
+ * 게시글의 반응/댓글을 집계한다. 포럼 게시글은 스레드 ID가 곧 첫 메시지 ID라서,
+ * 스레드 메시지 목록 한 번이면 첫 글의 반응 수와 댓글 작성자를 모두 얻는다.
+ * Free 플랜의 실행당 subrequest 한도(50) 때문에 게시글마다 요청은 이 한 번뿐이다.
  */
 export async function getEngagement(
   thread: WeeklyThread,
   token: string,
 ): Promise<Engagement> {
-  const { threadId, ownerId } = thread;
-  const headers = authHeaders(token);
-
-  const res = await fetch(`${API}/channels/${threadId}/messages?limit=100`, { headers });
+  const res = await fetch(`${API}/channels/${thread.threadId}/messages?limit=100`, {
+    headers: authHeaders(token),
+  });
   await ensureOk(res, "게시글 메시지 조회");
-  const messages = (await res.json()) as any[];
+  return countEngagement((await res.json()) as any[], thread);
+}
 
+/**
+ * 스레드 메시지 목록에서 참여 지표를 센다. 반응자 목록은 따로 조회하지 않으므로
+ * 작성자 본인의 반응은 걸러내지 못하고, 봇 자신의 반응(`me`)만 뺀다.
+ */
+export function countEngagement(
+  messages: any[],
+  { threadId, ownerId }: Pick<WeeklyThread, "threadId" | "ownerId">,
+): Engagement {
   const comments = messages.filter(
     (m) => m.id !== threadId && !m.author?.bot && m.author?.id !== ownerId,
   ).length;
 
-  // 이모지 종류가 달라도 같은 사람이면 1명으로 센다.
-  const reactors = new Set<string>();
   const starter = messages.find((m) => m.id === threadId);
-  for (const r of starter?.reactions ?? []) {
-    const emoji = r.emoji.id ? `${r.emoji.name}:${r.emoji.id}` : r.emoji.name;
-    const usersRes = await fetch(
-      `${API}/channels/${threadId}/messages/${threadId}/reactions/${encodeURIComponent(emoji)}?limit=100`,
-      { headers },
-    );
-    await ensureOk(usersRes, "반응 사용자 조회");
-    for (const u of (await usersRes.json()) as any[]) {
-      if (!u.bot && u.id !== ownerId) reactors.add(u.id);
-    }
-  }
+  const reactions = (starter?.reactions ?? []).reduce(
+    (sum: number, r: any) => sum + r.count - (r.me ? 1 : 0),
+    0,
+  );
 
-  return { reactors: reactors.size, comments };
+  return { reactions, comments };
 }
 
 export interface GuildMember {

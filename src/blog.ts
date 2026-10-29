@@ -63,11 +63,11 @@ export function firstPostTimes(posts: { ownerId: string; createdMs: number }[]):
 /** 댓글 1개에 매기는 점수. 댓글은 반응보다 희소해서 더 무겁게 친다. */
 const COMMENT_WEIGHT = 3;
 
-/** 게시글 작성자 본인과 봇을 제외한 참여 지표 */
+/** 게시글의 참여 지표 */
 export interface Engagement {
-  /** 고유 반응자 수 (한 사람이 이모지를 여러 개 눌러도 1) */
-  reactors: number;
-  /** 댓글 수 */
+  /** 반응 수 (이모지마다 따로 센다. 봇의 반응은 뺀다) */
+  reactions: number;
+  /** 작성자 본인과 봇을 뺀 댓글 수 */
   comments: number;
 }
 
@@ -81,12 +81,12 @@ export type RankedPost = Post & { score: number };
 
 /**
  * 참여 지표로 점수를 매겨 내림차순 정렬한다.
- * 동점이면 반응자가 많은 글이, 그래도 같으면 먼저 올라온 글이 앞선다.
+ * 동점이면 반응이 많은 글이, 그래도 같으면 먼저 올라온 글이 앞선다.
  */
 export function rankPosts<T extends Post>(posts: T[]): (T & { score: number })[] {
   return posts
-    .map((p) => ({ ...p, score: p.reactors + COMMENT_WEIGHT * p.comments }))
-    .sort((a, b) => b.score - a.score || b.reactors - a.reactors || a.createdMs - b.createdMs);
+    .map((p) => ({ ...p, score: p.reactions + COMMENT_WEIGHT * p.comments }))
+    .sort((a, b) => b.score - a.score || b.reactions - a.reactions || a.createdMs - b.createdMs);
 }
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -105,12 +105,12 @@ export function buildRankingReport(ranked: RankedPost[], topN: number, reference
 
   const lines = shown.map((p, i) => {
     const rank = MEDALS[i] ?? `\`${i + 1}위\``;
-    return `${rank} <#${p.threadId}> — <@${p.ownerId}>\n> 추천 ${p.reactors} · 댓글 ${p.comments} → **${p.score}점**`;
+    return `${rank} <#${p.threadId}> — <@${p.ownerId}>\n> 추천 ${p.reactions} · 댓글 ${p.comments} → **${p.score}점**`;
   });
 
   return [
     `📊 **블로그 ${week} 순위** — 이 중에서 베스트 글을 골라주세요`,
-    `-# 추천 1점 · 댓글 ${COMMENT_WEIGHT}점 (작성자 본인의 반응·댓글은 제외)`,
+    `-# 추천 1점 · 댓글 ${COMMENT_WEIGHT}점 (작성자 본인의 댓글은 제외)`,
     ...lines,
   ].join("\n");
 }
