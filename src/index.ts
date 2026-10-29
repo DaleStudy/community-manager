@@ -352,7 +352,17 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
   await postMessage(channelId, buildReport(forumChannelId, warn, late, weekRange), token);
   console.log(`[blog] report 게시 완료 warn=${warn.length} late=${late.length} week="${weekRange}"`);
 
-  await postRanking(threads, memberIds, env.ADMIN_CHANNEL_ID, token, referenceMs);
+  // 순위표가 실패해도 이미 올라간 리포트는 그대로 두고, 운영진이 알 수 있게 남긴다.
+  try {
+    await postRanking(threads, memberIds, env.ADMIN_CHANNEL_ID, token, referenceMs);
+  } catch (err: any) {
+    console.error("[blog] 순위 집계 실패", err);
+    await postMessage(
+      env.ADMIN_CHANNEL_ID,
+      `⚠️ 블로그 순위 집계에 실패했습니다: ${err?.message ?? "알 수 없는 오류"}`,
+      token,
+    );
+  }
 }
 
 // ── 달레UI 주간 업데이트 처리 ──────────────────────────────────────
