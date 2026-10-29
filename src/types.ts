@@ -33,6 +33,6 @@ export interface Env {
   DALEUI_PROJECT_NUMBER: string;
   /** 달레UI 주간 업데이트: `[{"discordId":"...","github":"..."}]` 형태의 멤버 매핑 */
   DALEUI_MEMBER_MAP: string;
-  /** 인증이 켜진 게이트웨이를 통과하기 위한 토큰 (Run 권한) */
-  AI_GATEWAY_TOKEN: string;
+  /** 같은 계정의 AI Gateway(dalestudy)를 토큰 없이 부르는 AI 바인딩 */
+  AI: Ai;
 }
