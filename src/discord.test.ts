@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import { webcrypto } from "node:crypto";
-import { DISCORD_MESSAGE_LIMIT, snowflakeToMs, splitForDiscord, verifySignature } from "./discord.js";
+import { DISCORD_MESSAGE_LIMIT, countEngagement, snowflakeToMs, splitForDiscord, verifySignature } from "./discord.js";
 
 beforeAll(() => {
   vi.stubGlobal("crypto", webcrypto);
@@ -135,5 +135,38 @@ describe("splitForDiscord", () => {
     for (const chunk of splitForDiscord(text)) {
       expect(chunk.length).toBeLessThanOrEqual(DISCORD_MESSAGE_LIMIT);
     }
+  });
+});
+
+describe("countEngagement", () => {
+  const thread = { threadId: "t1", ownerId: "owner" };
+  const starter = (reactions: { count: number; me?: boolean }[]) => ({
+    id: "t1",
+    author: { id: "owner" },
+    reactions,
+  });
+
+  it("첫 글의 반응 수를 이모지별로 더한다", () => {
+    const messages = [starter([{ count: 3 }, { count: 2 }])];
+    expect(countEngagement(messages, thread).reactions).toBe(5);
+  });
+
+  it("봇 자신의 반응은 뺀다", () => {
+    const messages = [starter([{ count: 3, me: true }])];
+    expect(countEngagement(messages, thread).reactions).toBe(2);
+  });
+
+  it("작성자 본인과 봇의 댓글은 세지 않는다", () => {
+    const messages = [
+      starter([]),
+      { id: "c1", author: { id: "reader" } },
+      { id: "c2", author: { id: "owner" } },
+      { id: "c3", author: { id: "bot", bot: true } },
+    ];
+    expect(countEngagement(messages, thread)).toEqual({ reactions: 0, comments: 1 });
+  });
+
+  it("첫 글이 목록에 없으면 반응은 0이다", () => {
+    expect(countEngagement([], thread)).toEqual({ reactions: 0, comments: 0 });
   });
 });

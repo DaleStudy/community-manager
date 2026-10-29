@@ -50,7 +50,7 @@ describe("buildWeekRange", () => {
 });
 
 function post(overrides: Partial<Post> & Pick<Post, "threadId">): Post {
-  return { ownerId: "u1", reactors: 0, comments: 0, createdMs: 0, ...overrides };
+  return { ownerId: "u1", reactions: 0, comments: 0, createdMs: 0, ...overrides };
 }
 
 describe("firstPostTimes", () => {
@@ -73,7 +73,7 @@ describe("rankPosts", () => {
   it("댓글 1개는 반응 3개와 같은 점수다", () => {
     const [a, b] = rankPosts([
       post({ threadId: "a", comments: 1 }),
-      post({ threadId: "b", reactors: 3 }),
+      post({ threadId: "b", reactions: 3 }),
     ]);
     expect(a.score).toBe(3);
     expect(b.score).toBe(3);
@@ -81,26 +81,26 @@ describe("rankPosts", () => {
 
   it("점수가 높은 글이 앞선다 — 반응 7 + 댓글 6 = 25점", () => {
     const ranked = rankPosts([
-      post({ threadId: "bigquery", reactors: 4 }),
-      post({ threadId: "error-handling", reactors: 7, comments: 6 }),
-      post({ threadId: "closure", reactors: 3 }),
+      post({ threadId: "bigquery", reactions: 4 }),
+      post({ threadId: "error-handling", reactions: 7, comments: 6 }),
+      post({ threadId: "closure", reactions: 3 }),
     ]);
     expect(ranked.map((p) => p.threadId)).toEqual(["error-handling", "bigquery", "closure"]);
     expect(ranked[0].score).toBe(25);
   });
 
-  it("동점이면 반응자가 많은 글이 앞선다", () => {
+  it("동점이면 반응이 많은 글이 앞선다", () => {
     const ranked = rankPosts([
       post({ threadId: "comments", comments: 2 }),
-      post({ threadId: "reactions", reactors: 6 }),
+      post({ threadId: "reactions", reactions: 6 }),
     ]);
     expect(ranked.map((p) => p.threadId)).toEqual(["reactions", "comments"]);
   });
 
-  it("점수와 반응자가 모두 같으면 먼저 올라온 글이 앞선다", () => {
+  it("점수와 반응이 모두 같으면 먼저 올라온 글이 앞선다", () => {
     const ranked = rankPosts([
-      post({ threadId: "late", reactors: 3, createdMs: 200 }),
-      post({ threadId: "early", reactors: 3, createdMs: 100 }),
+      post({ threadId: "late", reactions: 3, createdMs: 200 }),
+      post({ threadId: "early", reactions: 3, createdMs: 100 }),
     ]);
     expect(ranked.map((p) => p.threadId)).toEqual(["early", "late"]);
   });
@@ -108,10 +108,10 @@ describe("rankPosts", () => {
 
 describe("buildRankingReport", () => {
   const ranked = rankPosts([
-    post({ threadId: "t1", ownerId: "u1", reactors: 7, comments: 6 }),
-    post({ threadId: "t2", ownerId: "u2", reactors: 4 }),
-    post({ threadId: "t3", ownerId: "u3", reactors: 3 }),
-    post({ threadId: "t4", ownerId: "u4", reactors: 2 }),
+    post({ threadId: "t1", ownerId: "u1", reactions: 7, comments: 6 }),
+    post({ threadId: "t2", ownerId: "u2", reactions: 4 }),
+    post({ threadId: "t3", ownerId: "u3", reactions: 3 }),
+    post({ threadId: "t4", ownerId: "u4", reactions: 2 }),
   ]);
 
   it("상위 3개에 메달을 달고 나머지는 순번을 붙인다", () => {
