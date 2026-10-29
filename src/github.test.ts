@@ -453,6 +453,7 @@ describe("listRecentComments", () => {
 describe("getReviewAssignments", () => {
   it("PR마다 지정 리뷰어와 실제 리뷰어를 중복 없이 모은다", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
       json: async () => ({
         data: {
           repository: {
@@ -477,6 +478,17 @@ describe("getReviewAssignments", () => {
     expect(assignments.get(2)).toEqual({ requested: [], reviewers: [] });
     // PR을 하나씩 조회하지 않고 한 번에 묻는다.
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("HTTP 오류 응답이면 상태 코드와 함께 실패한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 502, text: async () => "Bad Gateway" }),
+    );
+
+    await expect(
+      getReviewAssignments("DaleStudy", "leetcode-study", [1], "test-token"),
+    ).rejects.toThrow("status=502");
   });
 
   it("PR이 없으면 조회하지 않는다", async () => {

@@ -547,6 +547,9 @@ export async function getReviewAssignments(
     headers: { ...ghHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({ query, variables: { org, repo } }),
   });
+  if (!response.ok) {
+    throw new Error(`리뷰 지정 조회 실패 (status=${response.status}): ${await response.text()}`);
+  }
 
   const result = (await response.json()) as any;
   if (result.errors) {
