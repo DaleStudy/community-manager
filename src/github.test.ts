@@ -31,7 +31,7 @@ const mockEnv: Env = {
   DALEUI_MEMBER_MAP: "[]",
   LEETCODE_CHANNEL_ID: "test-leetcode-channel-id",
   COACH_ROLE_ID: "test-coach-role-id",
-  AI_GATEWAY_TOKEN: "test-gateway-token",
+  AI: {} as Ai,
 };
 
 function makeSponsorshipResponse(

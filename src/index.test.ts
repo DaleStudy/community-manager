@@ -19,7 +19,7 @@ const env = {
   DISCORD_GUILD_ID: "guild",
   LEETCODE_CHANNEL_ID: "leetcode-channel",
   COACH_ROLE_ID: "coach-role",
-  AI_GATEWAY_TOKEN: "gateway-token",
+  AI: {} as Ai,
   // 마지막 항목이 현재 진행 중인 기수다.
   ROLE_TEAM_CONFIG: JSON.stringify([
     { value: "leetcode08", label: "8기", discordRoleId: "role-8", teamSlug: "leetcode08" },

@@ -9,6 +9,7 @@
  *   npm run preview:praise -- --context                   # 모델에 넘어가는 집계 결과까지 출력
  *   npm run preview:praise -- --at 2026-10-05T00:00:00Z   # 그 시각에 cron 이 돌았다고 보고 실행
  */
+import { getPlatformProxy } from "wrangler";
 import { collectReviewPraise } from "../src/index.js";
 import { generateSummary } from "../src/claude.js";
 import { splitForDiscord } from "../src/discord.js";
@@ -29,9 +30,7 @@ if (Number.isNaN(referenceMs)) {
   process.exit(1);
 }
 
-// --collect 모드는 모델을 부르지 않으므로 게이트웨이 토큰 없이도 돌려볼 수 있다.
-const required = collectOnly ? COLLECT_SECRETS : [...COLLECT_SECRETS, "AI_GATEWAY_TOKEN"];
-const missing = required.filter((key) => !process.env[key]);
+const missing = COLLECT_SECRETS.filter((key) => !process.env[key]);
 if (missing.length > 0) {
   console.error(`.dev.vars 에 다음 값이 없습니다: ${missing.join(", ")}`);
   console.error("`.dev.vars.example` 을 복사해 채운 뒤 다시 실행해주세요.");
@@ -63,11 +62,14 @@ if (collectOnly) {
   process.exit(0);
 }
 
+// wrangler.jsonc 의 AI 바인딩을 원격 게이트웨이에 연결한다. wrangler login 이 필요하다.
+const platform = await getPlatformProxy<Pick<Env, "AI">>();
 const message = await generateSummary(
   PRAISE_SYSTEM_PROMPT,
   buildPraisePrompt(collection.context),
-  env.AI_GATEWAY_TOKEN,
+  platform.env.AI,
 );
+await platform.dispose();
 
 const chunks = splitForDiscord(message);
 

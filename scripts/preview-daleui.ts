@@ -8,6 +8,7 @@
  *   npm run preview:daleui -- --collect # 수집만 (Claude 호출 없음 = 비용 0)
  *   npm run preview:daleui -- --context # 모델에 넘어가는 원문까지 출력
  */
+import { getPlatformProxy } from "wrangler";
 import { readWranglerVars } from "./wrangler-vars.js";
 import { collectDaleuiUpdate } from "../src/index.js";
 import { generateSummary } from "../src/claude.js";
@@ -21,9 +22,7 @@ const COLLECT_SECRETS = ["DISCORD_TOKEN", "GITHUB_APP_PRIVATE_KEY"];
 const collectOnly = process.argv.includes("--collect");
 const showContext = process.argv.includes("--context");
 
-// --collect 모드는 모델을 부르지 않으므로 게이트웨이 토큰 없이도 돌려볼 수 있다.
-const required = collectOnly ? COLLECT_SECRETS : [...COLLECT_SECRETS, "AI_GATEWAY_TOKEN"];
-const missing = required.filter((key) => !process.env[key]);
+const missing = COLLECT_SECRETS.filter((key) => !process.env[key]);
 if (missing.length > 0) {
   console.error(`.dev.vars 에 다음 값이 없습니다: ${missing.join(", ")}`);
   console.error("`.dev.vars.example` 을 복사해 채운 뒤 다시 실행해주세요.");
@@ -53,11 +52,14 @@ if (collectOnly) {
   process.exit(0);
 }
 
+// wrangler.jsonc 의 AI 바인딩을 원격 게이트웨이에 연결한다. wrangler login 이 필요하다.
+const platform = await getPlatformProxy<Pick<Env, "AI">>();
 const summary = await generateSummary(
   SUMMARY_SYSTEM_PROMPT,
   buildUserPrompt(collection.context),
-  env.AI_GATEWAY_TOKEN,
+  platform.env.AI,
 );
+await platform.dispose();
 
 const chunks = splitForDiscord(summary);
 

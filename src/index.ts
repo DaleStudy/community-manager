@@ -471,7 +471,7 @@ async function handleDaleuiWeeklyUpdate(env: Env, referenceMs: number): Promise<
   const summary = await generateSummary(
     SUMMARY_SYSTEM_PROMPT,
     buildUserPrompt(context),
-    env.AI_GATEWAY_TOKEN,
+    env.AI,
   );
 
   // 역할 멘션은 채널의 시작 메시지에 한 번만. 스레드 안에서는 개인 멘션만 쓴다.
@@ -584,7 +584,7 @@ async function handleReviewPraise(env: Env, referenceMs: number): Promise<void> 
   const message = await generateSummary(
     PRAISE_SYSTEM_PROMPT,
     buildPraisePrompt(collection.context),
-    env.AI_GATEWAY_TOKEN,
+    env.AI,
   );
 
   // 역할 멘션은 채널의 시작 메시지에 한 번만. 스레드 안에서는 개인 멘션만 쓴다.

@@ -37,6 +37,6 @@ export interface Env {
   LEETCODE_CHANNEL_ID: string;
   /** 모범 리뷰 칭찬: 순위에서 제외할 coach 역할 ID */
   COACH_ROLE_ID: string;
-  /** 인증이 켜진 게이트웨이를 통과하기 위한 토큰 (Run 권한) */
-  AI_GATEWAY_TOKEN: string;
+  /** 같은 계정의 AI Gateway(dalestudy)를 토큰 없이 부르는 AI 바인딩 */
+  AI: Ai;
 }
