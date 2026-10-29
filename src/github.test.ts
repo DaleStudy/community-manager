@@ -5,6 +5,7 @@ import {
   getTeamCreatedAt,
   inviteToTeam,
   listRecentComments,
+  getReviewAssignments,
 } from "./github.js";
 import type { Env } from "./types.js";
 
@@ -28,6 +29,8 @@ const mockEnv: Env = {
   DALEUI_ROLE_ID: "test-daleui-role-id",
   DALEUI_PROJECT_NUMBER: "18",
   DALEUI_MEMBER_MAP: "[]",
+  LEETCODE_CHANNEL_ID: "test-leetcode-channel-id",
+  COACH_ROLE_ID: "test-coach-role-id",
   AI: {} as Ai,
 };
 
@@ -414,6 +417,8 @@ describe("listRecentComments", () => {
   const reviewComment = {
     pull_request_url: "https://api.github.com/repos/DaleStudy/daleui/pulls/456",
     html_url: "https://github.com/DaleStudy/daleui/pull/456#discussion_r1",
+    id: 2,
+    in_reply_to_id: 1,
     user: { login: "bob" },
     body: "여기 네이밍을 바꾸면 좋겠어요",
     created_at: "2026-08-02T00:00:00Z",
@@ -440,7 +445,59 @@ describe("listRecentComments", () => {
 
     expect(comments).toEqual([
       expect.objectContaining({ number: 123, author: "alice", isReviewComment: false }),
-      expect.objectContaining({ number: 456, author: "bob", isReviewComment: true }),
+      expect.objectContaining({ number: 456, author: "bob", isReviewComment: true, inReplyTo: 1 }),
     ]);
+  });
+});
+
+describe("getReviewAssignments", () => {
+  it("PR마다 지정 리뷰어와 실제 리뷰어를 중복 없이 모은다", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          repository: {
+            p1: {
+              number: 1,
+              reviews: { nodes: [{ author: { login: "bob" } }, { author: { login: "bob" } }] },
+              timelineItems: {
+                // 팀 리뷰 요청처럼 사용자가 아닌 요청은 login 이 없다.
+                nodes: [{ requestedReviewer: { login: "bob" } }, { requestedReviewer: {} }],
+              },
+            },
+            p2: { number: 2, reviews: { nodes: [] }, timelineItems: { nodes: [] } },
+          },
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const assignments = await getReviewAssignments("DaleStudy", "leetcode-study", [1, 2], "test-token");
+
+    expect(assignments.get(1)).toEqual({ requested: ["bob"], reviewers: ["bob"] });
+    expect(assignments.get(2)).toEqual({ requested: [], reviewers: [] });
+    // PR을 하나씩 조회하지 않고 한 번에 묻는다.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("HTTP 오류 응답이면 상태 코드와 함께 실패한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 502, text: async () => "Bad Gateway" }),
+    );
+
+    await expect(
+      getReviewAssignments("DaleStudy", "leetcode-study", [1], "test-token"),
+    ).rejects.toThrow("status=502");
+  });
+
+  it("PR이 없으면 조회하지 않는다", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const assignments = await getReviewAssignments("DaleStudy", "leetcode-study", [], "test-token");
+
+    expect(assignments.size).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -275,17 +275,25 @@ export function countEngagement(
   return { reactions, comments };
 }
 
+export interface GuildMember {
+  id: string;
+  /** username, 서버 닉네임, 표시 이름 중 있는 것 — GitHub 아이디와 대조할 때 쓴다 */
+  names: string[];
+  roles: string[];
+}
+
 /**
- * 특정 역할을 가진 사람(비봇) ID 목록 — 페이지네이션.
+ * 주어진 역할 중 하나라도 가진 사람(비봇) 목록 — 페이지네이션.
+ * 길드 멤버 전체를 한 번만 훑으므로 여러 역할을 함께 조회하는 편이 싸다.
  * ⚠️ GET /guilds/{id}/members 는 GUILD_MEMBERS(privileged) 인텐트가 켜져 있어야 동작한다.
  */
-export async function listRoleMembers(
+export async function listMembersWithRoles(
   guildId: string,
-  roleId: string,
+  roleIds: string[],
   token: string,
-): Promise<string[]> {
+): Promise<GuildMember[]> {
   const headers = authHeaders(token);
-  const ids: string[] = [];
+  const found: GuildMember[] = [];
   let after = "0";
 
   while (true) {
@@ -297,13 +305,29 @@ export async function listRoleMembers(
     const members = (await res.json()) as any[];
     if (members.length === 0) break;
     for (const m of members) {
-      if (!m.user?.bot && (m.roles ?? []).includes(roleId)) ids.push(m.user.id);
+      const roles: string[] = m.roles ?? [];
+      if (m.user?.bot || !roleIds.some((r) => roles.includes(r))) continue;
+      found.push({
+        id: m.user.id,
+        names: [m.user.username, m.nick, m.user.global_name].filter(Boolean),
+        roles,
+      });
     }
     after = members[members.length - 1].user.id;
     if (members.length < 1000) break;
   }
 
-  return ids;
+  return found;
+}
+
+/** 특정 역할을 가진 사람(비봇) ID 목록 */
+export async function listRoleMembers(
+  guildId: string,
+  roleId: string,
+  token: string,
+): Promise<string[]> {
+  const members = await listMembersWithRoles(guildId, [roleId], token);
+  return members.map((m) => m.id);
 }
 
 /**

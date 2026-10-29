@@ -304,6 +304,9 @@ export async function listRecentIssuesAndPulls(
 }
 
 export interface CommentItem {
+  id: number;
+  /** 리뷰 코멘트가 답글이면 원 코멘트 ID. 리뷰 대화(thread)를 다시 묶을 때 쓴다. */
+  inReplyTo: number | null;
   repo: string;
   /** 코멘트가 달린 이슈/PR 번호 */
   number: number;
@@ -348,6 +351,8 @@ export async function listRecentComments(
   ]);
 
   const toItem = (c: any, isReviewComment: boolean): CommentItem => ({
+    id: c.id,
+    inReplyTo: c.in_reply_to_id ?? null,
     repo,
     number: numberFromComment(c),
     author: c.user?.login ?? "unknown",
@@ -497,6 +502,71 @@ export async function getProjectItems(
   }
 
   return items;
+}
+
+// ── 리트코드 스터디 모범 리뷰 칭찬 수집 헬퍼 ─────────────────────────
+
+export interface ReviewAssignment {
+  /** 리뷰 요청을 받은 적이 있는 사람 (요청이 취소됐어도 담당으로 본다) */
+  requested: string[];
+  /** 리뷰(승인·변경 요청·코멘트)를 실제로 제출한 사람 */
+  reviewers: string[];
+}
+
+/**
+ * PR마다 지정 리뷰어와 실제 리뷰어를 한 번의 GraphQL 요청으로 모은다.
+ * PR을 하나씩 조회하면 주차당 수십 번의 요청이 생기므로 alias로 묶는다.
+ */
+export async function getReviewAssignments(
+  org: string,
+  repo: string,
+  numbers: number[],
+  token: string,
+): Promise<Map<number, ReviewAssignment>> {
+  const assignments = new Map<number, ReviewAssignment>();
+  if (numbers.length === 0) return assignments;
+
+  const aliases = numbers.map((n) => `p${n}: pullRequest(number: ${n}) { ...F }`).join("\n");
+  const query = `
+    query($org: String!, $repo: String!) {
+      repository(owner: $org, name: $repo) {
+        ${aliases}
+      }
+    }
+    fragment F on PullRequest {
+      number
+      reviews(first: 100) { nodes { author { login } } }
+      timelineItems(first: 50, itemTypes: [REVIEW_REQUESTED_EVENT]) {
+        nodes { ... on ReviewRequestedEvent { requestedReviewer { ... on User { login } } } }
+      }
+    }
+  `;
+
+  const response = await fetch(`${GH_API}/graphql`, {
+    method: "POST",
+    headers: { ...ghHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables: { org, repo } }),
+  });
+  if (!response.ok) {
+    throw new Error(`리뷰 지정 조회 실패 (status=${response.status}): ${await response.text()}`);
+  }
+
+  const result = (await response.json()) as any;
+  if (result.errors) {
+    throw new Error(`리뷰 지정 조회 실패: ${JSON.stringify(result.errors)}`);
+  }
+
+  for (const pr of Object.values(result.data?.repository ?? {}) as any[]) {
+    if (!pr) continue;
+    const logins = (nodes: any[], pick: (n: any) => string | undefined) =>
+      [...new Set(nodes.map(pick).filter((l): l is string => Boolean(l)))];
+    assignments.set(pr.number, {
+      requested: logins(pr.timelineItems?.nodes ?? [], (n) => n.requestedReviewer?.login),
+      reviewers: logins(pr.reviews?.nodes ?? [], (n) => n.author?.login),
+    });
+  }
+
+  return assignments;
 }
 
 /**

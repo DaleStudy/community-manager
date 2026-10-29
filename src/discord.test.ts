@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import { webcrypto } from "node:crypto";
-import { DISCORD_MESSAGE_LIMIT, countEngagement, snowflakeToMs, splitForDiscord, verifySignature } from "./discord.js";
+import {
+  DISCORD_MESSAGE_LIMIT,
+  countEngagement,
+  listMembersWithRoles,
+  snowflakeToMs,
+  splitForDiscord,
+  verifySignature,
+} from "./discord.js";
 
 beforeAll(() => {
   vi.stubGlobal("crypto", webcrypto);
@@ -135,6 +142,30 @@ describe("splitForDiscord", () => {
     for (const chunk of splitForDiscord(text)) {
       expect(chunk.length).toBeLessThanOrEqual(DISCORD_MESSAGE_LIMIT);
     }
+  });
+});
+
+describe("listMembersWithRoles", () => {
+  it("역할 중 하나라도 가진 비봇 멤버를 이름 후보와 함께 돌려준다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [
+          { user: { id: "1", username: "alice", global_name: "Alice Kim" }, nick: null, roles: ["cohort"] },
+          { user: { id: "2", username: "bob", global_name: null }, nick: "bobby", roles: ["coach"] },
+          { user: { id: "3", username: "carol" }, roles: ["other"] },
+          { user: { id: "4", username: "dalestudy", bot: true }, roles: ["cohort"] },
+        ],
+      }),
+    );
+
+    const members = await listMembersWithRoles("guild", ["cohort", "coach"], "test-token");
+
+    expect(members).toEqual([
+      { id: "1", names: ["alice", "Alice Kim"], roles: ["cohort"] },
+      { id: "2", names: ["bob", "bobby"], roles: ["coach"] },
+    ]);
   });
 });
 
