@@ -28,10 +28,22 @@ export function isBot(login: string): boolean {
   return login.endsWith("[bot]") || login === "dalestudy";
 }
 
-/** `[name] WEEK 03 Solutions` 형식의 풀이 PR 제목에서 주차를 읽는다. */
+/** 기수 첫 주차 앞의 온보딩 주간. 0주차로 본다. */
+export const ONBOARDING_WEEK = 0;
+
+/**
+ * `[name] WEEK 03 Solutions` 형식의 풀이 PR 제목에서 주차를 읽는다.
+ * `[name] Onboarding` 은 온보딩 주간(0주차)이다.
+ */
 export function parseWeek(title: string): number | null {
+  if (/^\[[^\]]+\]\s*Onboarding\b/i.test(title)) return ONBOARDING_WEEK;
   const match = title.match(/^\[[^\]]+\]\s*WEEK\s*(\d+)/i);
   return match ? Number(match[1]) : null;
+}
+
+/** 메시지에 쓰는 주차 이름 ("WEEK 3", 온보딩 주간은 "Onboarding") */
+export function formatWeek(week: number): string {
+  return week === ONBOARDING_WEEK ? "Onboarding" : `WEEK ${week}`;
 }
 
 /**
@@ -254,7 +266,7 @@ export function buildPraiseContext(
     return id ? `${login} (<@${id}>)` : `${login} (멘션 불가)`;
   };
 
-  lines.push(`# WEEK ${review.week} 코드 리뷰`);
+  lines.push(`# ${formatWeek(review.week)} 코드 리뷰`);
 
   lines.push("\n## 리뷰 커버리지");
   lines.push(`- 풀이 PR: ${review.prCount}개`);
@@ -381,12 +393,12 @@ export function buildPraisePrompt(context: string): string {
 /** 채널에 올릴 스레드 시작 메시지 — 역할 멘션은 여기 한 번만 등장한다. */
 export function buildPraiseStarter(week: number, roleId: string): string {
   return (
-    `WEEK ${week} 코드 리뷰 돌아보기 ${THREAD_NAME_PREFIX}\n` +
+    `${formatWeek(week)} 코드 리뷰 돌아보기 ${THREAD_NAME_PREFIX}\n` +
     `<@&${roleId}> 지난주에 서로 주고받은 코드 리뷰 중 특히 좋았던 순간들을 모아봤어요!`
   );
 }
 
 /** 스레드 이름 (100자 제한) */
 export function buildPraiseThreadName(week: number): string {
-  return `${THREAD_NAME_PREFIX} WEEK ${week} 코드 리뷰 돌아보기`.slice(0, 100);
+  return `${THREAD_NAME_PREFIX} ${formatWeek(week)} 코드 리뷰 돌아보기`.slice(0, 100);
 }
