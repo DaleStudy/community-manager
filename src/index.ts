@@ -31,6 +31,7 @@ import {
   buildPraiseStarter,
   buildPraiseThreadName,
   matchMember,
+  formatWeek,
   pickTargetWeek,
   selectWeekPrs,
 } from "./praise.js";
@@ -555,7 +556,7 @@ export async function collectReviewPraise(
   const mentions = buildMentions(logins, members);
 
   console.log(
-    `[praise] WEEK ${week} PR=${prs.length} 리뷰받은PR=${review.reviewedPrs} ` +
+    `[praise] ${formatWeek(week)} PR=${prs.length} 리뷰받은PR=${review.reviewedPrs} ` +
       `리뷰어=${review.reviewers.length} 코치=${coaches.length} 모범후보=${review.threads.length} ` +
       `멘션매칭=${mentions.size}/${new Set(logins).size}`,
   );
