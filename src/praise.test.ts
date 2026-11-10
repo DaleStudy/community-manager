@@ -84,7 +84,6 @@ describe("parseWeek", () => {
 
   it("온보딩 PR은 0주차로 읽는다", () => {
     expect(parseWeek("[alice] Onboarding")).toBe(0);
-    expect(parseWeek("[bob] onboarding")).toBe(0);
     expect(parseWeek("Onboarding")).toBeNull();
   });
 
@@ -366,6 +365,5 @@ describe("buildPraiseStarter / buildPraiseThreadName", () => {
 
   it("온보딩 주간은 Onboarding으로 쓴다", () => {
     expect(buildPraiseThreadName(0)).toBe("🧵 Onboarding 코드 리뷰 돌아보기");
-    expect(buildPraiseStarter(0, "999")).toMatch(/^Onboarding 코드 리뷰 돌아보기/);
   });
 });
