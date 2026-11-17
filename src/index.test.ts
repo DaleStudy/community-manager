@@ -117,6 +117,23 @@ describe("collectReviewPraise", () => {
     expect(collection?.context).toContain("bob");
     expect(collection?.context).not.toContain("dave");
   });
+
+  it("최근에 갱신만 된 이전 기수의 같은 주차 PR 때문에 코멘트 수집 범위가 넓어지지 않는다", async () => {
+    vi.mocked(listRecentIssuesAndPulls).mockResolvedValue([
+      pr(1, "alice"),
+      // 이전 기수의 같은 주차 PR. 브랜치 삭제로 updatedAt 만 최근이다.
+      pr(2, "carol", {
+        createdAt: "2026-06-21T01:54:16Z",
+        updatedAt: "2026-11-08T00:27:30Z",
+        mergedAt: "2026-06-23T12:52:12Z",
+      }),
+    ]);
+
+    const collection = await collectReviewPraise(env, REF);
+
+    expect(collection?.prCount).toBe(1);
+    expect(vi.mocked(listRecentComments).mock.calls[0][2]).toBe("2026-11-03T00:00:00Z");
+  });
 });
 
 describe("월요일 cron 의 모범 리뷰 칭찬", () => {

@@ -58,17 +58,21 @@ export function pickTargetWeek(items: ActivityItem[], nowMs: number): number | n
 
 /**
  * 대상 주차의 풀이 PR. 병합 없이 닫힌 PR은 중복 제출이라 뺀다.
- * 주차 번호는 기수마다 다시 시작하므로, 과거 시점을 재생할 때 다음 기수의 같은 주차 PR이
- * 섞이지 않도록 기준 시각(nowMs) 뒤에 열린 PR도 뺀다.
+ * 주차 번호는 기수마다 다시 시작하므로, 생성 시각이 조회 범위 [nowMs - LOOKBACK_MS, nowMs]
+ * 안인 PR만 남긴다. 상한은 과거 시점을 재생할 때 다음 기수의 같은 주차 PR을 빼고,
+ * 하한은 브랜치 삭제처럼 최근에 갱신만 된 이전 기수의 같은 주차 PR을 뺀다.
  */
 export function selectWeekPrs(items: ActivityItem[], week: number, nowMs: number): ActivityItem[] {
-  return items.filter(
-    (it) =>
+  return items.filter((it) => {
+    const createdMs = Date.parse(it.createdAt);
+    return (
       it.isPullRequest &&
       parseWeek(it.title) === week &&
       !(it.state === "closed" && !it.mergedAt) &&
-      Date.parse(it.createdAt) <= nowMs,
-  );
+      createdMs >= nowMs - LOOKBACK_MS &&
+      createdMs <= nowMs
+    );
+  });
 }
 
 /** Discord 이름(username, 닉네임, 표시 이름) 중 GitHub 아이디와 같은 멤버. 대소문자는 무시한다. */
