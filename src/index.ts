@@ -81,6 +81,9 @@ export default {
       // 블로그 발행 체크, 리트코드 모범 리뷰 칭찬 (월 09:00 KST — 주차 마무리 다음 날)
       ctx.waitUntil(handleBlogPublishCheck(env, event.scheduledTime));
       ctx.waitUntil(handleReviewPraise(env, event.scheduledTime));
+    } else if (event.cron === "0 0 * * TUE") {
+      // 블로그 베스트 글 순위표 (화 09:00 KST — 마감 뒤 하루 동안 달린 반응·댓글까지 반영)
+      ctx.waitUntil(handleBlogRanking(env, event.scheduledTime));
     } else if (event.cron === "0 23 * * FRI") {
       // 달레UI 주간 업데이트 (토 08:00 KST — 09:30 회의 1시간 30분 전)
       ctx.waitUntil(handleDaleuiWeeklyUpdate(env, event.scheduledTime));
@@ -367,9 +370,31 @@ async function handleBlogPublishCheck(env: Env, referenceMs: number): Promise<vo
   const weekRange = buildWeekRange(referenceMs);
   await postMessage(channelId, buildReport(forumChannelId, warn, late, weekRange), token);
   console.log(`[blog] report 게시 완료 warn=${warn.length} late=${late.length} week="${weekRange}"`);
+}
 
-  // 순위표가 실패해도 이미 올라간 리포트는 그대로 두고, 운영진이 알 수 있게 남긴다.
+/**
+ * 매주 화요일 09:00(KST) 실행. 지난주 월 09:00 ~ 이번 주 월 09:00 에 올라온 게시글로
+ * 베스트 글 순위표를 만들어 운영진 채널에 올린다. 마감 직후에도 반응과 댓글이 달리므로
+ * 발행 체크보다 하루 늦게 집계한다.
+ */
+async function handleBlogRanking(env: Env, referenceMs: number): Promise<void> {
+  const token = env.DISCORD_TOKEN;
+  const w = computeWeekWindow(referenceMs);
+
+  // 실패하면 운영진이 알 수 있게 남긴다.
   try {
+    const memberIds = await listRoleMembers(env.DISCORD_GUILD_ID, env.BLOG_STUDY_ROLE_ID, token);
+    if (memberIds.length === 0) {
+      console.log("[blog] blog 역할 대상자가 없어 순위 집계를 건너뜁니다");
+      return;
+    }
+    const threads = await collectWeeklyThreads(
+      env.DISCORD_GUILD_ID,
+      env.BLOG_STUDY_FORUM_ID,
+      token,
+      w.lastMonday9Utc,
+      w.thisMonday9Utc,
+    );
     await postRanking(threads, memberIds, env.ADMIN_CHANNEL_ID, token, referenceMs);
   } catch (err: any) {
     console.error("[blog] 순위 집계 실패", err);

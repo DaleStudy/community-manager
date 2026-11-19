@@ -131,6 +131,11 @@ describe("buildRankingReport", () => {
     expect(buildRankingReport(ranked, 5, REF)).toContain("블로그 06/22 - 06/28 순위");
   });
 
+  it("화요일에 집계해도 지난 주 월~일을 보여준다", () => {
+    // 화 09:00 KST cron
+    expect(buildRankingReport(ranked, 5, REF + 24 * 60 * 60 * 1000)).toContain("블로그 06/22 - 06/28 순위");
+  });
+
   it("topN을 넘는 글은 잘라낸다", () => {
     expect(buildRankingReport(ranked, 3, REF)).not.toContain("<#t4>");
   });
