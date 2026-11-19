@@ -4,6 +4,7 @@ import type { Env } from "./types.js";
 import worker, { collectReviewPraise } from "./index.js";
 import { getInstallationToken, getReviewAssignments, listRecentComments, listRecentIssuesAndPulls } from "./github.js";
 import { createThread, listMembersWithRoles, postMessage, postMessageWithRoleMention, splitForDiscord } from "./discord.js";
+import { collectWeeklyThreads, getEngagement, listRoleMembers } from "./discord.js";
 import { generateSummary } from "./claude.js";
 
 vi.mock("./github.js");
@@ -19,6 +20,9 @@ const env = {
   DISCORD_GUILD_ID: "guild",
   LEETCODE_CHANNEL_ID: "leetcode-channel",
   COACH_ROLE_ID: "coach-role",
+  ADMIN_CHANNEL_ID: "admin-channel",
+  BLOG_STUDY_FORUM_ID: "blog-forum",
+  BLOG_STUDY_ROLE_ID: "blog-role",
   AI: {} as Ai,
   // 마지막 항목이 현재 진행 중인 기수다.
   ROLE_TEAM_CONFIG: JSON.stringify([
@@ -152,5 +156,49 @@ describe("월요일 cron 의 모범 리뷰 칭찬", () => {
     expect(generateSummary).not.toHaveBeenCalled();
     expect(postMessageWithRoleMention).not.toHaveBeenCalled();
     expect(createThread).not.toHaveBeenCalled();
+  });
+});
+
+describe("화요일 cron 의 블로그 순위표", () => {
+  // 2026-11-10 09:00 KST, 11/02 ~ 11/08 주차 마감 다음 날
+  const TUE = Date.parse("2026-11-10T00:00:00Z");
+
+  it("지난주 월 09:00 ~ 이번 주 월 09:00 게시글로 순위표를 운영진 채널에 올린다", async () => {
+    vi.mocked(listRoleMembers).mockResolvedValue(["u1"]);
+    vi.mocked(collectWeeklyThreads).mockResolvedValue([
+      { threadId: "t1", ownerId: "u1", createdMs: Date.parse("2026-11-05T00:00:00Z"), title: "글" },
+    ]);
+    vi.mocked(getEngagement).mockResolvedValue({ reactions: 2, comments: 1 });
+    const { ctx, settle } = fakeContext();
+
+    await worker.scheduled(scheduledEvent("0 0 * * TUE", TUE), env, ctx);
+    await settle();
+
+    expect(collectWeeklyThreads).toHaveBeenCalledWith(
+      "guild",
+      "blog-forum",
+      "discord-token",
+      Date.parse("2026-11-02T00:00:00Z"),
+      Date.parse("2026-11-09T00:00:00Z"),
+    );
+    const [channelId, report] = vi.mocked(postMessage).mock.calls[0];
+    expect(channelId).toBe("admin-channel");
+    expect(report).toContain("블로그 11/02 - 11/08 순위");
+    expect(report).toContain("<#t1>");
+  });
+
+  it("집계에 실패하면 운영진 채널에 알린다", async () => {
+    vi.mocked(listRoleMembers).mockRejectedValue(new Error("rate limited"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { ctx, settle } = fakeContext();
+
+    await worker.scheduled(scheduledEvent("0 0 * * TUE", TUE), env, ctx);
+    await settle();
+
+    expect(postMessage).toHaveBeenCalledWith(
+      "admin-channel",
+      expect.stringContaining("rate limited"),
+      "discord-token",
+    );
   });
 });

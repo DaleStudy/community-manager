@@ -96,7 +96,7 @@ const MEDALS = ["🥇", "🥈", "🥉"];
  * 최종 선정은 운영진이 이 순위표를 보고 판단한다.
  */
 export function buildRankingReport(ranked: RankedPost[], topN: number, referenceMs: number): string {
-  const week = buildWeekRange(referenceMs - 7 * DAY_MS);
+  const week = buildWeekRange(computeWeekWindow(referenceMs).lastMonday9Utc);
   const shown = ranked.filter((p) => p.score > 0).slice(0, topN);
 
   if (shown.length === 0) {
