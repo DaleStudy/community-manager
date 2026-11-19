@@ -82,6 +82,11 @@ describe("parseWeek", () => {
     expect(parseWeek("[bob] Week 12 solutions")).toBe(12);
   });
 
+  it("온보딩 PR은 0주차로 읽는다", () => {
+    expect(parseWeek("[alice] Onboarding")).toBe(0);
+    expect(parseWeek("Onboarding")).toBeNull();
+  });
+
   it("풀이 PR 형식이 아니면 null", () => {
     expect(parseWeek("docs: README 9기 추가")).toBeNull();
     expect(parseWeek("WEEK 03 Solutions")).toBeNull();
@@ -125,6 +130,14 @@ describe("pickTargetWeek", () => {
 
   it("기수 사이처럼 풀이 PR이 없으면 null", () => {
     expect(pickTargetWeek([], REF)).toBeNull();
+  });
+
+  it("온보딩 주간에 병합된 온보딩 PR이면 0주차를 고른다", () => {
+    const items = [
+      pr(1, "a", { title: "[a] Onboarding" }),
+      pr(2, "b", { title: "[b] Onboarding" }),
+    ];
+    expect(pickTargetWeek(items, REF)).toBe(0);
   });
 });
 
@@ -348,5 +361,9 @@ describe("buildPraiseStarter / buildPraiseThreadName", () => {
 
   it("스레드 이름에 주차를 넣는다", () => {
     expect(buildPraiseThreadName(3)).toBe("🧵 WEEK 3 코드 리뷰 돌아보기");
+  });
+
+  it("온보딩 주간은 Onboarding으로 쓴다", () => {
+    expect(buildPraiseThreadName(0)).toBe("🧵 Onboarding 코드 리뷰 돌아보기");
   });
 });
