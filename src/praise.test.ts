@@ -143,6 +143,18 @@ describe("selectWeekPrs", () => {
     const items = [pr(1, "a"), pr(2, "b", { createdAt: "2027-02-02T00:00:00Z" })];
     expect(selectWeekPrs(items, 1, REF).map((p) => p.number)).toEqual([1]);
   });
+
+  it("브랜치 삭제 등으로 최근에 갱신만 된 이전 기수의 같은 주차 PR은 뺀다", () => {
+    const items = [
+      pr(1, "a"),
+      pr(2, "b", {
+        createdAt: "2026-06-21T01:54:16Z",
+        updatedAt: "2026-11-08T00:27:30Z",
+        mergedAt: "2026-06-23T12:52:12Z",
+      }),
+    ];
+    expect(selectWeekPrs(items, 1, REF).map((p) => p.number)).toEqual([1]);
+  });
 });
 
 describe("matchMember", () => {
